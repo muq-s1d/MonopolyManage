@@ -6,8 +6,8 @@ import { groupCells, money } from '../engine/engine.ts'
 import type { Entry, Game, State } from '../engine/types.ts'
 import Creature, { type Reaction } from './Creature.tsx'
 
-const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)')
-function useReduced() {
+export const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)')
+export function useReduced() {
   const [r, setR] = useState(reducedQuery.matches)
   useEffect(() => {
     const f = () => setR(reducedQuery.matches)
@@ -17,7 +17,7 @@ function useReduced() {
   return r
 }
 
-function useDarkTheme() {
+export function useDarkTheme() {
   const read = () => {
     const t = document.documentElement.dataset.theme
     return t ? t === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches
@@ -112,6 +112,22 @@ function Spotlight({ x, z, dark }: { x: number; z: number; dark: boolean }) {
   )
 }
 
+/** Warm key light plus a studio environment built from light panels, so brass reflects without fetching an HDR. */
+export function StageLights({ dark }: { dark: boolean }) {
+  return (
+    <>
+      <ambientLight intensity={dark ? 0.55 : 0.9} />
+      <directionalLight position={[-4, 6, 6]} intensity={dark ? 1.6 : 2} color="#FFF4DD" />
+      <directionalLight position={[5, 3, -4]} intensity={0.6} color="#9FC7B4" />
+      <Environment resolution={128} frames={1}>
+        <Lightformer intensity={2.2} position={[0, 4, -6]} scale={[12, 3, 1]} color="#FFF1CF" />
+        <Lightformer intensity={1.2} position={[-6, 2, 2]} rotation-y={Math.PI / 2} scale={[6, 2, 1]} color="#E8C872" />
+        <Lightformer intensity={0.8} position={[6, 1, 2]} rotation-y={-Math.PI / 2} scale={[6, 2, 1]} />
+      </Environment>
+    </>
+  )
+}
+
 function Scene({ game, state, entries, reduced, dark }: { game: Game; state: State; entries: Entry[]; reduced: boolean; dark: boolean }) {
   const spots = useMemo(() => layout(game.players.length), [game.players.length])
   const idx = useMemo(() => new Map(game.players.map((p, i) => [p.id, i])), [game.players])
@@ -154,14 +170,7 @@ function Scene({ game, state, entries, reduced, dark }: { game: Game; state: Sta
 
   return (
     <>
-      <ambientLight intensity={dark ? 0.55 : 0.9} />
-      <directionalLight position={[-4, 6, 6]} intensity={dark ? 1.6 : 2} color="#FFF4DD" />
-      <directionalLight position={[5, 3, -4]} intensity={0.6} color="#9FC7B4" />
-      <Environment resolution={128} frames={1}>
-        <Lightformer intensity={2.2} position={[0, 4, -6]} scale={[12, 3, 1]} color="#FFF1CF" />
-        <Lightformer intensity={1.2} position={[-6, 2, 2]} rotation-y={Math.PI / 2} scale={[6, 2, 1]} color="#E8C872" />
-        <Lightformer intensity={0.8} position={[6, 1, 2]} rotation-y={-Math.PI / 2} scale={[6, 2, 1]} />
-      </Environment>
+      <StageLights dark={dark} />
       <Spotlight x={ax} z={az + 0.9} dark={dark} />
       {game.players.map((p, i) => {
         const owned = game.board.groups.some(g => {

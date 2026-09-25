@@ -2,6 +2,8 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import type { Player } from '../engine/types.ts'
 
+export const webgl = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch { return false } })()
+
 export const PLAYER_COLORS = [
   { name: 'Garnet', hex: '#B83A4B' }, { name: 'Sapphire', hex: '#3563B5' },
   { name: 'Marigold', hex: '#E3A42B' }, { name: 'Amethyst', hex: '#8457B3' },

@@ -208,6 +208,9 @@
 .step-1 .podium-plinth { height: 120px; }
 .step-2 .podium-plinth { height: 84px; }
 .step-3 .podium-plinth { height: 60px; }
+.podium-canvas { height: clamp(260px, 38vh, 380px); margin-top: 0.5rem; }
+.podium.flat { margin-top: 0; }
+.podium.flat .seal, .podium.flat .podium-plinth { display: none; }
 .standings { width: 100%; border-collapse: collapse; }
 .standings caption { caption-side: bottom; text-align: left; padding-top: 0.9rem; font-size: 0.9rem; }
 .standings th, .standings td { padding: 0.55rem 0.5rem; text-align: right; border-bottom: 1px solid var(--line-soft); }
