@@ -1,5 +1,7 @@
 # The Counting House
 
+**Play it now: [monopoly-manage.vercel.app](https://monopoly-manage.vercel.app)**
+
 A banker for physical Monopoly nights. The board, dice, pieces and cards stay on the table. One laptop or tablet sits beside it, the admin records what happened, and the app moves the money, tracks deeds, houses, jail and turns, and keeps a ledger that can be undone.
 
 No paper money to count, no rent tables to squint at, no banker mistakes.
@@ -46,6 +48,8 @@ Everything is stored in the browser (localStorage). There is no backend and no a
 
 ## Deploying
 
-The app is a static Vite build, so Vercel detects it with no configuration: import the repository at vercel.com/new and deploy.
+The live site is [monopoly-manage.vercel.app](https://monopoly-manage.vercel.app), hosted on Vercel. The repository is connected to the Vercel project, so every push to `main` deploys to production automatically, and pull requests get preview links.
+
+To host your own copy: the app is a static Vite build that Vercel detects with no configuration. Import the repository at vercel.com/new, or run `npx vercel deploy --prod` from the project folder.
 
 Not affiliated with or endorsed by Hasbro. Monopoly is a trademark of Hasbro. Bring your own board.
