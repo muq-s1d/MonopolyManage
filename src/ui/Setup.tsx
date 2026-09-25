@@ -7,6 +7,7 @@ import type { Player, Rules } from '../engine/types.ts'
 import { customBoards, store } from '../store.ts'
 import { useUI } from './ctx.ts'
 import { ACCESSORIES, PLAYER_COLORS, Seal, Switch } from './kit.tsx'
+import { sfx } from './sound.ts'
 
 export const RULES: { key: keyof Rules; label: string; help: string }[] = [
   { key: 'freeParking', label: 'Free Parking jackpot', help: 'Taxes, fines and card payments go into a pot. Landing on Free Parking takes it all.' },
@@ -46,13 +47,14 @@ export default function Setup() {
 
   const add = () => {
     const n = name.trim()
-    if (!n) return setNameError('Type a name first.')
+    if (!n) { sfx('error'); return setNameError('Type a name first.') }
     if (players.some(p => p.name.toLowerCase() === n.toLowerCase())) return setNameError('Two players cannot share a name.')
     if (players.length >= 8) return setNameError('The table seats eight at most.')
     const used = new Set(players.map(p => p.color))
     const color = PLAYER_COLORS.find(c => !used.has(c.hex))!.hex
     setPlayers([...players, { id: uid(), name: n, color, accessory: Math.floor(Math.random() * ACCESSORIES.length), seed: randomSeed() }])
     setName(''); setNameError('')
+    sfx('tick')
   }
 
   const update = (id: string, patch: Partial<Player>) => setPlayers(ps => ps.map(p => (p.id === id ? { ...p, ...patch } : p)))
@@ -67,11 +69,11 @@ export default function Setup() {
   const moveBy = (i: number, d: number) => transition(() => setPlayers(ps => {
     const next = [...ps]; const [p] = next.splice(i, 1); next.splice(i + d, 0, p); return next
   }))
-  const shuffle = () => transition(() => setPlayers(ps => {
+  const shuffle = () => { sfx('shuffle'); transition(() => setPlayers(ps => {
     const next = [...ps]
     for (let i = next.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [next[i], next[j]] = [next[j], next[i]] }
     return next
-  }))
+  })) }
 
   const cashOk = typeof cash === 'number' && cash > 0, salaryOk = typeof salary === 'number' && salary >= 0
   const ready = players.length >= 2 && cashOk && salaryOk
@@ -81,6 +83,7 @@ export default function Setup() {
       id: uid(), createdAt: Date.now(), rules, players,
       board: { ...structuredClone(board), startingCash: cash as number, salary: salary as number },
     })
+    sfx('start')
     ui.go('table')
   }
 

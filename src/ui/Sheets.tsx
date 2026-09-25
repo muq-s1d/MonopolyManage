@@ -5,6 +5,7 @@ import { download, prefs, store, type Snap } from '../store.ts'
 import { shortName } from './BoardMap.tsx'
 import { useUI, type SheetSpec } from './ctx.ts'
 import { inkOn, Money, Pips, Seal, Sheet, Switch } from './kit.tsx'
+import { sfx } from './sound.ts'
 
 type Props = { game: Game; state: State }
 const who = (g: Game, id: string) => g.players.find(p => p.id === id)!
@@ -263,6 +264,7 @@ function CardSheet({ game, state, deck }: Props & { deck: 'chance' | 'chest' }) 
 
   const pick = (card: Card) => {
     const f = card.effect
+    if (f.type === 'advance' || f.type === 'nearest' || f.type === 'move') sfx('card')
     if (f.type === 'advance') {
       if (f.cell === 0) { if (ui.act(E.passGo(game, p.id, true))) ui.close() }
       else setAdvance(f.cell)
@@ -551,7 +553,7 @@ function MenuSheet({ game }: Props) {
   const [sound, setSound] = useState(prefs.get().sound !== false)
   return (
     <Sheet eyebrow="The back office" title="Menu" onClose={ui.close}>
-      <Switch label="Coin sounds" help="A soft clink whenever money changes hands." checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v) }} />
+      <Switch label="Sound effects" help="Arcade chimes for buying, rent, building, jail, cards and more." checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v); if (v) sfx('coin') }} />
       <div className="menu-list">
         <button className="ghost" onClick={() => ui.go('end')}>Standings and end of game</button>
         <button className="ghost" onClick={() => ui.go('ledger')}>Open the ledger</button>

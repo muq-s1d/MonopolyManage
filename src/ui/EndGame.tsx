@@ -1,8 +1,9 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { money, netWorth } from '../engine/engine.ts'
 import { download, store, type Snap } from '../store.ts'
 import { useUI } from './ctx.ts'
 import { Seal, webgl } from './kit.tsx'
+import { sfx } from './sound.ts'
 
 const Podium = lazy(() => import('../stage/Podium.tsx'))
 
@@ -10,6 +11,7 @@ export default function EndGame({ snap }: { snap: NonNullable<Snap> }) {
   const ui = useUI()
   const { game, state } = snap
   const [confirm, setConfirm] = useState(false)
+  useEffect(() => sfx('victory'), [])
   const m = (n: number) => money(game.board, n)
   const ranked = game.players
     .map(p => ({ p, w: netWorth(game, state, p.id), out: state.bankrupt[p.id] }))
