@@ -30,7 +30,7 @@ export function ThemeToggle() {
 function PlayerRail({ game, state }: { game: Game; state: State }) {
   const ui = useUI()
   return (
-    <ol className="rail" aria-label="Players in turn order">
+    <ol className="rail" data-many={game.players.length >= 5} aria-label="Players in turn order">
       {game.players.map(p => {
         const deeds = state.owner.filter(o => o === p.id).length
         const out = state.bankrupt[p.id]
@@ -68,7 +68,7 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
   return (
     <section className="panel turn" aria-labelledby="turn-h">
       <p className="eyebrow">Round {state.round}</p>
-      <h2 id="turn-h" className="display turn-title"><span style={{ color: p.color }}>{p.name}</span>&rsquo;s turn</h2>
+      <h2 id="turn-h" className="display turn-title"><span className="turn-name" style={{ ['--pc' as string]: p.color }}>{p.name}</span>&rsquo;s turn</h2>
 
       {jailed && state.jailTurns[p.id] === 0 && (
         <p className="jail-box" role="status"><strong>Sent to jail.</strong> Going to jail ends the turn, so pass the dice on.</p>
@@ -93,6 +93,7 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
       </div>
 
       <div className="turn-end">
+        {doubles > 0 && doubles < 3 && <p className="muted small">{p.name} rolls again. Record the landing, then roll once more.</p>}
         {!jailed && <button className="ghost" onClick={() => setDoubles(d => d + 1)} disabled={doubles >= 3}>
           Rolled doubles{doubles ? <span className="num"> ({doubles} of 3)</span> : null}
         </button>}
@@ -100,12 +101,9 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
           <button className="plaque danger big" onClick={() => { ui.act(goToJail(game, p.id, 'rolled doubles three times and went to jail')); setDoubles(0) }}>
             Third doubles: to jail
           </button>
-        ) : doubles > 0 ? (
-          <p className="muted small">{p.name} rolls again. Record the landing, then roll once more.</p>
         ) : (
           <button className="plaque big" onClick={() => ui.act(endTurn(game, state))}>Next: {next.name}</button>
         )}
-        {doubles > 0 && doubles < 3 && <button className="plaque big" onClick={() => ui.act(endTurn(game, state))}>Next: {next.name}</button>}
       </div>
     </section>
   )
