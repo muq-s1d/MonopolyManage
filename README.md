@@ -17,6 +17,7 @@ No paper money to count, no rent tables to squint at, no banker mistakes.
 - **Ledger:** every action in plain words. Undo the last one, or rewind to any point.
 - **Standings:** a podium and net worth using the official timed game rule.
 - **House rules:** Free Parking jackpot, auctions, double salary on Go, and more, each switchable.
+- **Sound effects:** arcade style chimes, all synthesized in the browser: a coin for money in, a jingle for buying, a power up for houses and hotels, a sad trombone for jail, a fanfare for the winner. Switch them off in the menu.
 - **Board editor:** copy a classic board and change any name, price, rent, colour set or card to match your edition. Share boards as files.
 
 ![Paying rent with the title deed](docs/rent.jpg)
