@@ -186,6 +186,22 @@ test('net worth', () => {
   check('Could raise: cash + 30 + 30 mortgages + 25 house', 1315, w.raisable)
 })
 
+test('board validation', () => {
+  for (const b of presets) assert.deepEqual(E.validateBoard(b), {}, `${b.name} preset is valid`)
+  const b = structuredClone(US)
+  b.cells[1].rents = [2, 10, 5, 90, 160, 250]
+  b.cells[3].name = ' '
+  b.cells[0] = { kind: 'tax', name: 'Oops', amount: 10 }
+  b.groups.push({ id: 'ghost', name: 'Ghost', color: '#000000' })
+  b.cells = b.cells.map(c => (c.kind === 'jail' ? { kind: 'parking', name: 'Lot' } : c))
+  const e = E.validateBoard(b)
+  assert.match(e['cell.1.rents'], /never drop/)
+  assert.match(e['cell.3.name'], /needs a name/)
+  assert.match(e['cell.0.kind'], /must be Go/)
+  assert.match(e['group.ghost'], /no properties/)
+  assert.match(e.jail, /needs a Jail/)
+})
+
 test.after(() => {
   console.log('\n  check'.padEnd(62) + 'expected  actual')
   for (const [l, e, a] of rows) console.log(`  ${l.padEnd(58)} ${String(e).padStart(8)} ${String(a).padStart(7)}${e === a ? '' : '  MISMATCH'}`)
