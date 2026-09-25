@@ -40,7 +40,8 @@ export default function Ledger({ snap }: { snap: NonNullable<Snap> }) {
         ))}
       </div>
 
-      <p className="muted ledger-help">Every action is written here in order. Undo removes the newest entry. Rewind removes every entry after the one you pick, and balances are recalculated from what is left.</p>
+      <p className="muted ledger-help">Every action is written here in order. Undo removes the newest entry. Rewind removes every entry after the one you pick, and balances are recalculated from what is left.
+        On the stage, coins fly from payer to payee: one coin for {game.board.currency}10, and one more each time the amount doubles, up to ten.</p>
 
       <ol className="ledger-list">
         {rows.map(({ e, i }) => (

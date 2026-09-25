@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { BookOpen, Menu, Moon, Sun, Undo2 } from 'lucide-react'
 import { endTurn, goToJail, leaveJail, money, nextPlayer, passGo } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
@@ -6,6 +6,9 @@ import { prefs, store, type Snap } from '../store.ts'
 import BoardMap from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
 import { Money, Seal } from './kit.tsx'
+
+const Stage = lazy(() => import('../stage/Stage.tsx'))
+const webgl = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch { return false } })()
 
 export function ThemeToggle() {
   const [dark, setDark] = useState(() => {
@@ -148,7 +151,8 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
           </section>
           <TurnPanel key={`${state.turn}:${entries.filter(e => e.ops.some(o => o.op === 'turn')).length}`} game={game} state={state} />
         </div>
-        <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell })} />
+        <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell })}
+          stage={webgl ? <Suspense fallback={null}><Stage game={game} state={state} entries={entries} /></Suspense> : undefined} />
       </main>
 
       <footer className="ticker" aria-live="polite">

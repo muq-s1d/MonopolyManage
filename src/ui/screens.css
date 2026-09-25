@@ -121,6 +121,13 @@
   grid-row: 2 / 11; grid-column: 2 / 11; display: grid; place-content: center; gap: 1rem; text-align: center; padding: 1rem;
   background: radial-gradient(circle at 50% 45%, var(--surface), var(--surface-2));
 }
+.board-center { position: relative; overflow: hidden; }
+.board-center.has-stage { place-content: stretch; grid-template-rows: auto 1fr auto; padding: 0.75rem; }
+.board-center.has-stage .board-wordmark { grid-row: 1; transform: none; font-size: clamp(0.9rem, 1.6vw, 1.3rem); margin: 0; position: relative; z-index: 1; pointer-events: none; }
+.board-center.has-stage .board-stats { grid-row: 3; position: relative; z-index: 1; gap: 0.25rem 1.25rem; pointer-events: none; }
+.board-center.has-stage .board-stats strong { font-size: clamp(1rem, 1.7vw, 1.4rem); }
+.board-center.has-stage .board-stats small { display: none; }
+.stage-canvas { position: absolute; inset: 0; }
 .board-wordmark { font-size: clamp(1rem, 2.1vw, 1.8rem); color: var(--brass-hi); transform: rotate(-8deg); margin-bottom: 0.75rem; }
 :root[data-theme='light'] .board-wordmark { color: var(--brass); }
 @media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .board-wordmark { color: var(--brass); } }
