@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { housesLeft, hotelsLeft, money } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
 import { Pips } from './kit.tsx'
@@ -24,8 +24,8 @@ const breakable = (n: string) => n.replace(/\p{L}{10,}/gu, w => `${w.slice(0, Ma
 
 const side = (i: number) => (i < 10 ? 'b' : i < 20 ? 'l' : i < 30 ? 't' : 'r')
 
-function BoardMap({ game, state, onPick, highlight }: {
-  game: Game; state: State; onPick: (cell: number) => void; highlight?: number
+function BoardMap({ game, state, onPick, highlight, stage }: {
+  game: Game; state: State; onPick: (cell: number) => void; highlight?: number; stage?: ReactNode
 }) {
   const b = game.board
   const color = (id: string | null) => game.players.find(p => p.id === id)?.color
@@ -56,7 +56,8 @@ function BoardMap({ game, state, onPick, highlight }: {
           </button>
         )
       })}
-      <div className="board-center">
+      <div className={`board-center${stage ? ' has-stage' : ''}`}>
+        {stage}
         <p className="display board-wordmark">The Counting House</p>
         <div className="board-stats">
           {game.rules.freeParking && (
@@ -65,7 +66,7 @@ function BoardMap({ game, state, onPick, highlight }: {
           <div><span className="eyebrow">Houses left</span><strong className="num">{housesLeft(game, state)}</strong><small className="muted">of {b.houses} in the bank</small></div>
           <div><span className="eyebrow">Hotels left</span><strong className="num">{hotelsLeft(game, state)}</strong><small className="muted">of {b.hotels} in the bank</small></div>
         </div>
-        <p className="muted small">Tap a square to see its deed or record a landing</p>
+        {!stage && <p className="muted small">Tap a square to see its deed or record a landing</p>}
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ArrowDown, ArrowUp, Shuffle, Trash2 } from 'lucide-react'
 import { presets } from '../engine/boards.ts'
@@ -28,6 +28,7 @@ const transition = (fn: () => void) =>
 
 export default function Setup() {
   const ui = useUI()
+  useEffect(() => { import('../stage/Stage.tsx') }, []) // warm the 3D chunk while the table is being seated
   const boards = [...presets, ...customBoards.list()]
   const [boardId, setBoardId] = useState(boards[0].id)
   const board = boards.find(b => b.id === boardId) ?? boards[0]
