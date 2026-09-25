@@ -35,6 +35,7 @@ export default function Lobby() {
           )}
           <button className={snap ? 'ghost' : 'plaque big'} onClick={() => ui.go('setup')}>Open a new ledger</button>
           <button className="ghost" onClick={() => file.current?.click()}>Restore a backup</button>
+          <button className="ghost" onClick={() => ui.go('editor')}>Design a board</button>
           <input ref={file} type="file" accept="application/json,.json" hidden onChange={e => importFile(e.target.files?.[0])} />
         </div>
         {error && <p className="error-text" role="alert">{error}</p>}
