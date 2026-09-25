@@ -530,6 +530,7 @@ function BankruptSheet({ game, state, pid, creditor }: Props & { pid: string; cr
         <button className="ghost" onClick={ui.close}>Not yet</button>
         <button className="plaque big danger" onClick={confirm}>Declare bankruptcy</button>
       </>}>
+      <div className="stack">
       <p>Before giving up, {p.name} could raise up to <strong className="num">{E.money(game.board, w.raisable)}</strong> by selling buildings and mortgaging deeds.</p>
       <label className="field"><span>Who is owed</span>
         <select className="input" value={to} onChange={e => setTo(e.target.value)}>
@@ -541,6 +542,7 @@ function BankruptSheet({ game, state, pid, creditor }: Props & { pid: string; cr
         ? 'Buildings are sold to the bank, the cash goes to the bank, and every deed returns to the board unowned and unmortgaged.'
         : `Buildings are sold to the bank at half price. ${partyName(game, to)} receives all the cash, every deed as it stands and any jail cards.`}</p>
       <p className="muted small">This can be undone from the ledger like any other entry.</p>
+      </div>
     </Sheet>
   )
 }
