@@ -28,28 +28,11 @@ The stage in the middle of the board shows whose turn it is (the creature in the
 
 ![Banknote paper theme](docs/table-light.jpg)
 
-## Running it
-
-```bash
-npm install
-npm run dev      # http://localhost:5173
-npm test         # engine tests with hand-checked values
-npm run build    # production build in dist/
-```
-
-Everything is stored in the browser (localStorage). There is no backend and no account. Use **Menu, Download a backup** before clearing browser data.
-
 ## How it works
 
 - `src/engine/` holds the whole game. Every action is a ledger entry made of small operations (transfer, own, build, mortgage, jail, turn), and the current state is replayed from the ledger. Undo is dropping the last entry, and replaying always gives the same numbers.
 - `src/ui/` is the React interface, written in plain CSS with a Gilded Deco theme in felt night and banknote paper variants.
 - `src/stage/` is the lazy loaded three.js scene with procedural creatures, so the rest of the app loads fast and still works without WebGL.
 - `src/editor/` is the board editor, with field-by-field validation.
-
-## Deploying
-
-The live site is [monopoly-manage.vercel.app](https://monopoly-manage.vercel.app), hosted on Vercel. The repository is connected to the Vercel project, so every push to `main` deploys to production automatically, and pull requests get preview links.
-
-To host your own copy: the app is a static Vite build that Vercel detects with no configuration. Import the repository at vercel.com/new, or run `npx vercel deploy --prod` from the project folder.
 
 Not affiliated with or endorsed by Hasbro. Monopoly is a trademark of Hasbro. Bring your own board.
