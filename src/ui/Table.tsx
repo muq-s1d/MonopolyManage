@@ -5,7 +5,7 @@ import type { Game, State } from '../engine/types.ts'
 import { prefs, store, type Snap } from '../store.ts'
 import BoardMap from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
-import { Money, Seal, webgl } from './kit.tsx'
+import { Money, readable, Seal, webgl } from './kit.tsx'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
 
@@ -68,7 +68,7 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
   return (
     <section className="panel turn" aria-labelledby="turn-h">
       <p className="eyebrow">Round {state.round}</p>
-      <h2 id="turn-h" className="display turn-title"><span className="turn-name" style={{ ['--pc' as string]: p.color }}>{p.name}</span>&rsquo;s turn</h2>
+      <h2 id="turn-h" className="display turn-title"><span className="turn-name" style={{ ['--pc' as string]: readable(p.color) }}>{p.name}</span>&rsquo;s turn</h2>
 
       {jailed && state.jailTurns[p.id] === 0 && (
         <p className="jail-box" role="status"><strong>Sent to jail.</strong> Going to jail ends the turn, so pass the dice on.</p>
