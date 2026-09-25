@@ -9,7 +9,7 @@ import Table from './ui/Table.tsx'
 import Ledger from './ui/Ledger.tsx'
 import EndGame from './ui/EndGame.tsx'
 import Sheets from './ui/Sheets.tsx'
-import { clink } from './ui/sound.ts'
+import { sfx, soundFor } from './ui/sound.ts'
 
 const BoardEditor = lazy(() => import('./editor/BoardEditor.tsx'))
 
@@ -50,16 +50,22 @@ export default function App() {
     open: setSheet,
     close: () => setSheet(null),
     say: text => show({ text }, 4000),
+    undo: () => {
+      if (!store.get()?.entries.length) return
+      store.undo()
+      sfx('undo')
+      show({ text: 'Undid the last entry' }, 4000)
+    },
     act: (x: Entry | Err) => {
       if (isErr(x)) {
+        sfx('error')
         const who = x.who
         show({ text: x.error, error: true, action: who ? { label: 'Raise money', run: () => setSheet({ kind: 'portfolio', player: who }) } : undefined }, 7000)
         return false
       }
       store.commit(x)
-      const biggest = Math.max(0, ...x.ops.map(o => (o.op === 'transfer' ? o.amount : 0)))
-      if (biggest) clink(Math.max(1, Math.round(Math.log10(biggest)))) // 1 coin under 32, 2 to 316, 3 above
-      show({ text: x.memo, action: { label: 'Undo', run: () => { store.undo(); setToast(null) } } }, 5000)
+      sfx(soundFor(x))
+      show({ text: x.memo, action: { label: 'Undo', run: () => { store.undo(); sfx('undo'); setToast(null) } } }, 5000)
       return true
     },
   }), [show])

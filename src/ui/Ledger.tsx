@@ -4,6 +4,7 @@ import type { Entry } from '../engine/types.ts'
 import { store, type Snap } from '../store.ts'
 import { useUI } from './ctx.ts'
 import { Seal } from './kit.tsx'
+import { sfx } from './sound.ts'
 
 const involves = (e: Entry, id: string, name: string) =>
   e.memo.includes(name) || e.ops.some(o =>
@@ -28,7 +29,7 @@ export default function Ledger({ snap }: { snap: NonNullable<Snap> }) {
           <p className="eyebrow">{entries.length} {entries.length === 1 ? 'entry' : 'entries'}</p>
           <h1 className="display">The Ledger</h1>
         </div>
-        <button className="ghost" disabled={!entries.length} onClick={() => { store.undo(); ui.say('Undid the last entry') }}><Undo2 size={16} /> Undo last</button>
+        <button className="ghost" disabled={!entries.length} onClick={ui.undo}><Undo2 size={16} /> Undo last</button>
       </header>
 
       <div className="chips" role="group" aria-label="Filter by player">
@@ -54,7 +55,7 @@ export default function Ledger({ snap }: { snap: NonNullable<Snap> }) {
                 <span className="confirm-inline" role="alert">
                   Remove {entries.length - 1 - i} later {entries.length - 1 - i === 1 ? 'entry' : 'entries'}?
                   <button className="ghost" onClick={() => setRewindTo(null)}>Cancel</button>
-                  <button className="plaque danger" onClick={() => { store.rewind(i + 1); setRewindTo(null); ui.say(`Rewound to entry ${i + 1}`) }}>Rewind</button>
+                  <button className="plaque danger" onClick={() => { store.rewind(i + 1); sfx('undo'); setRewindTo(null); ui.say(`Rewound to entry ${i + 1}`) }}>Rewind</button>
                 </span>
               ) : <button className="ghost" onClick={() => setRewindTo(i)}>Rewind to here</button>
             )}

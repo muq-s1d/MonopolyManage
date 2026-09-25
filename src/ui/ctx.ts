@@ -22,6 +22,8 @@ export type UI = {
   /** Commit an engine result, or show why it cannot happen. Returns true when committed. */
   act: (x: Entry | Err) => boolean
   say: (text: string) => void
+  /** Remove the newest ledger entry, with its sound and a note. */
+  undo: () => void
 }
 
 export const UICtx = createContext<UI>(null!)

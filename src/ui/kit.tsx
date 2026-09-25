@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import type { Player } from '../engine/types.ts'
+import { sfx } from './sound.ts'
 
 export const webgl = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch { return false } })()
 
@@ -111,7 +112,7 @@ export function Sheet({ title, eyebrow, onClose, children, foot, wide }: {
   close.current = onClose
   useEffect(() => {
     const d = ref.current!
-    if (!d.open) d.showModal()
+    if (!d.open) { d.showModal(); sfx('tick') }
     const cancel = (e: Event) => { e.preventDefault(); close.current() }
     d.addEventListener('cancel', cancel)
     return () => d.removeEventListener('cancel', cancel)

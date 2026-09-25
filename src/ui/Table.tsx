@@ -123,7 +123,7 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
       const s = store.get()
       if (!s) return
       if (e.key === 'n') ui.act(endTurn(s.game, s.state))
-      else if (e.key === 'u') { if (s.entries.length) { store.undo(); ui.say('Undid the last entry') } }
+      else if (e.key === 'u') ui.undo()
       else if (e.key === 'l') ui.open({ kind: 'landed' })
     }
     addEventListener('keydown', key)
@@ -157,7 +157,7 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
       <footer className="ticker" aria-live="polite">
         <span className="eyebrow">Last entry</span>
         <span className="ticker-text">{last ? last.memo : 'The ledger is open. Nothing recorded yet.'}</span>
-        <button className="ghost" disabled={!last} onClick={() => { store.undo(); ui.say('Undid the last entry') }}><Undo2 size={16} /> Undo</button>
+        <button className="ghost" disabled={!last} onClick={ui.undo}><Undo2 size={16} /> Undo</button>
       </footer>
     </div>
   )
