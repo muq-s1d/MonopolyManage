@@ -40,7 +40,7 @@ const chance: Card[] = [
   { title: 'Advance to {cell}', effect: { type: 'advance', cell: 24 } },
   { title: 'Advance to {cell}', effect: { type: 'advance', cell: 11 } },
   { title: 'Advance to the nearest railroad and pay double rent', effect: { type: 'nearest', kind: 'railroad' } },
-  { title: 'Advance to the nearest railroad and pay double rent (second copy)', effect: { type: 'nearest', kind: 'railroad' } },
+  { title: 'Advance to the nearest railroad and pay double rent', effect: { type: 'nearest', kind: 'railroad' } },
   { title: 'Advance to the nearest utility and pay ten times the dice', effect: { type: 'nearest', kind: 'utility' } },
   { title: 'Bank pays you a dividend', effect: { type: 'collect', amount: 50 } },
   { title: 'Get out of jail free', effect: { type: 'jailCard' } },

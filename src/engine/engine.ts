@@ -18,7 +18,7 @@ export function initialState(g: Game): State {
     cash: per(g.board.startingCash), pot: 0, bank: 0,
     owner: Array(n).fill(null), level: Array(n).fill(0), mortgaged: Array(n).fill(false),
     jailed: per(false), jailTurns: per(0), jailCards: per(0), bankrupt: per(false),
-    turn: g.players[0].id, round: 1,
+    turn: g.players[0]?.id ?? '', round: 1,
   }
 }
 
@@ -400,4 +400,53 @@ export function bankrupt(g: Game, s: State, pid: string, creditor: Party): Entry
   if (s.jailed[pid]) ops.push({ op: 'jail', player: pid, in: false })
   ops.push({ op: 'bankrupt', player: pid })
   return entry(`${name(g, pid)} went bankrupt. Everything went to ${name(g, creditor)}.`, ops)
+}
+
+// ---------- custom boards ----------
+
+/** Every problem with a board, keyed by the field it belongs to. Empty means the board is playable. */
+export function validateBoard(b: Board): Record<string, string> {
+  const e: Record<string, string> = {}
+  const whole = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n >= 0
+  if (!b.name.trim()) e.name = 'Give the board a name.'
+  if (!b.currency.trim()) e.currency = 'Pick a currency symbol, such as $ or £.'
+  for (const k of ['salary', 'startingCash', 'jailFine', 'houses', 'hotels'] as const) if (!whole(b[k])) e[k] = 'Use a whole number, zero or more.'
+  if (whole(b.startingCash) && b.startingCash === 0) e.startingCash = 'Players need some starting cash.'
+  if (b.cells.length !== 40) e.cells = 'A board has exactly 40 squares.'
+  if (b.cells[0]?.kind !== 'go') e['cell.0.kind'] = 'The first square must be Go.'
+  const has = (k: string) => b.cells.some(c => c.kind === k)
+  if (has('gotojail') && !has('jail')) e.jail = 'Go to Jail needs a Jail square somewhere on the board.'
+  const groupIds = new Set(b.groups.map(g => g.id))
+  b.cells.forEach((c, i) => {
+    const k = `cell.${i}`
+    if (!c.name.trim()) e[`${k}.name`] = 'Every square needs a name.'
+    if (c.kind === 'property') {
+      if (!c.group || !groupIds.has(c.group)) e[`${k}.group`] = 'Pick a colour set.'
+      if (!whole(c.price) || !c.price) e[`${k}.price`] = 'Price must be a whole number above zero.'
+      if (!whole(c.houseCost) || !c.houseCost) e[`${k}.houseCost`] = 'House cost must be a whole number above zero.'
+      const r = c.rents ?? []
+      if (r.length !== 6 || !r.every(whole)) e[`${k}.rents`] = 'Fill in all six rents with whole numbers.'
+      else if (!r[0]) e[`${k}.rents`] = 'Base rent must be above zero.'
+      else if (r.some((x, j) => j > 0 && x < r[j - 1])) e[`${k}.rents`] = 'Rent should never drop as buildings are added.'
+    }
+    if ((c.kind === 'railroad' || c.kind === 'utility') && (!whole(c.price) || !c.price)) e[`${k}.price`] = 'Price must be a whole number above zero.'
+    if (c.kind === 'tax' && !whole(c.amount)) e[`${k}.amount`] = 'Tax must be a whole number, zero or more.'
+  })
+  for (const g of b.groups) {
+    if (!g.name.trim()) e[`group.${g.id}`] = 'Name this colour set.'
+    else if (!groupCells(b, g.id).length) e[`group.${g.id}`] = `${g.name} has no properties. Assign some or remove it.`
+  }
+  const rails = b.cells.filter(c => c.kind === 'railroad').length
+  const utils = b.cells.filter(c => c.kind === 'utility').length
+  if (b.railroadRents.length < rails || !b.railroadRents.every(whole)) e.railroadRents = `Enter a rent for owning 1 to ${rails} railroads.`
+  if (b.utilityMultipliers.length < utils || !b.utilityMultipliers.every(whole)) e.utilityMultipliers = `Enter a dice multiplier for owning 1 to ${utils} utilities.`
+  for (const deck of ['chance', 'chest'] as const) b[deck].forEach((c, i) => {
+    const k = `${deck}.${i}`, f = c.effect
+    if (!c.title.trim()) e[k] = 'Every card needs a title.'
+    else if ('amount' in f && !whole(f.amount)) e[k] = 'Use a whole amount.'
+    else if (f.type === 'repairs' && (!whole(f.house) || !whole(f.hotel))) e[k] = 'Use whole amounts per house and hotel.'
+    else if (f.type === 'advance' && !b.cells[f.cell]) e[k] = 'Pick the square this card moves to.'
+    else if (f.type === 'nearest' && !b.cells.some(x => x.kind === f.kind)) e[k] = `This board has no ${f.kind}.`
+  })
+  return e
 }
