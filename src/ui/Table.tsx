@@ -5,10 +5,9 @@ import type { Game, State } from '../engine/types.ts'
 import { prefs, store, type Snap } from '../store.ts'
 import BoardMap from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
-import { Money, Seal } from './kit.tsx'
+import { Money, Seal, webgl } from './kit.tsx'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
-const webgl = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch { return false } })()
 
 export function ThemeToggle() {
   const [dark, setDark] = useState(() => {

@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { money, netWorth } from '../engine/engine.ts'
 import { download, store, type Snap } from '../store.ts'
 import { useUI } from './ctx.ts'
-import { Seal } from './kit.tsx'
+import { Seal, webgl } from './kit.tsx'
+
+const Podium = lazy(() => import('../stage/Podium.tsx'))
 
 export default function EndGame({ snap }: { snap: NonNullable<Snap> }) {
   const ui = useUI()
@@ -26,7 +28,12 @@ export default function EndGame({ snap }: { snap: NonNullable<Snap> }) {
         <span />
       </header>
 
-      <ol className="podium" aria-label="Top three">
+      {webgl && (
+        <Suspense fallback={<div className="podium-canvas" />}>
+          <Podium ranked={ranked.map(r => ({ player: r.p, bankrupt: r.out }))} />
+        </Suspense>
+      )}
+      <ol className={`podium${webgl ? ' flat' : ''}`} aria-label="Top three">
         {ranked.slice(0, 3).map((r, i) => (
           <li key={r.p.id} className={`podium-step step-${i + 1}`}>
             <Seal player={r.p} size={i === 0 ? 104 : 76} />
