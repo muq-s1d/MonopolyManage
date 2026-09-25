@@ -9,6 +9,7 @@ import Table from './ui/Table.tsx'
 import Ledger from './ui/Ledger.tsx'
 import EndGame from './ui/EndGame.tsx'
 import Sheets from './ui/Sheets.tsx'
+import { clink } from './ui/sound.ts'
 
 const BoardEditor = lazy(() => import('./editor/BoardEditor.tsx'))
 
@@ -56,6 +57,8 @@ export default function App() {
         return false
       }
       store.commit(x)
+      const biggest = Math.max(0, ...x.ops.map(o => (o.op === 'transfer' ? o.amount : 0)))
+      if (biggest) clink(Math.max(1, Math.round(Math.log10(biggest)))) // 1 coin under 32, 2 to 316, 3 above
       show({ text: x.memo, action: { label: 'Undo', run: () => { store.undo(); setToast(null) } } }, 5000)
       return true
     },

@@ -1,10 +1,10 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import * as E from '../engine/engine.ts'
 import type { Board, Card, Cell, Game, Party, Player, State } from '../engine/types.ts'
-import { download, store, type Snap } from '../store.ts'
+import { download, prefs, store, type Snap } from '../store.ts'
 import { shortName } from './BoardMap.tsx'
 import { useUI, type SheetSpec } from './ctx.ts'
-import { inkOn, Money, Pips, Seal, Sheet } from './kit.tsx'
+import { inkOn, Money, Pips, Seal, Sheet, Switch } from './kit.tsx'
 
 type Props = { game: Game; state: State }
 const who = (g: Game, id: string) => g.players.find(p => p.id === id)!
@@ -548,8 +548,10 @@ function BankruptSheet({ game, state, pid, creditor }: Props & { pid: string; cr
 function MenuSheet({ game }: Props) {
   const ui = useUI()
   const [confirming, setConfirming] = useState(false)
+  const [sound, setSound] = useState(prefs.get().sound !== false)
   return (
     <Sheet eyebrow="The back office" title="Menu" onClose={ui.close}>
+      <Switch label="Coin sounds" help="A soft clink whenever money changes hands." checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v) }} />
       <div className="menu-list">
         <button className="ghost" onClick={() => ui.go('end')}>Standings and end of game</button>
         <button className="ghost" onClick={() => ui.go('ledger')}>Open the ledger</button>
