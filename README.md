@@ -17,6 +17,7 @@ No paper money to count, no rent tables to squint at, no banker mistakes.
 - **Trades:** deeds, cash and jail cards between two players, with a summary before you shake on it.
 - **Raise money and bankruptcy:** see what a player could raise, then hand everything to the creditor if it comes to that.
 - **Ledger:** every action in plain words. Undo the last one, or rewind to any point.
+- **Saving:** games save automatically in the browser you play on, with no account needed. Before clearing browser data or switching devices, use **Menu, Download a backup**, then **Restore a backup** in the lobby to carry on.
 - **Standings:** a podium and net worth using the official timed game rule.
 - **House rules:** Free Parking jackpot, auctions, double salary on Go, and more, each switchable.
 - **Sound effects:** arcade style chimes, all synthesized in the browser: a coin for money in, a jingle for buying, a power up for houses and hotels, a sad trombone for jail, a fanfare for the winner. Switch them off in the menu.
