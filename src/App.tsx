@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isErr } from './engine/engine.ts'
 import type { Entry, Err } from './engine/types.ts'
 import { store, useSnap } from './store.ts'
@@ -9,6 +9,8 @@ import Table from './ui/Table.tsx'
 import Ledger from './ui/Ledger.tsx'
 import EndGame from './ui/EndGame.tsx'
 import Sheets from './ui/Sheets.tsx'
+
+const BoardEditor = lazy(() => import('./editor/BoardEditor.tsx'))
 
 type Toast = { text: string; error?: boolean; action?: { label: string; run: () => void } }
 
@@ -60,7 +62,7 @@ export default function App() {
   }), [show])
 
   // A game that vanished (cleared or rewound past the start) sends you back to the lobby.
-  const current = snap ? screen : screen === 'setup' ? screen : 'lobby'
+  const current = snap ? screen : screen === 'editor' || screen === 'setup' ? screen : 'lobby'
 
   useEffect(() => {
     if (!snap || current !== 'table') return
@@ -79,6 +81,7 @@ export default function App() {
       {current === 'table' && snap && <Table snap={snap} />}
       {current === 'ledger' && snap && <Ledger snap={snap} />}
       {current === 'end' && snap && <EndGame snap={snap} />}
+      {current === 'editor' && <Suspense fallback={<p className="loading">Opening the drafting room</p>}><BoardEditor /></Suspense>}
       {sheet && snap && <Sheets spec={sheet} snap={snap} />}
       {toast && <ToastView toast={toast} />}
     </UICtx.Provider>

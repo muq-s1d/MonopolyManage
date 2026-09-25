@@ -147,6 +147,7 @@ export default function Setup() {
               </button>
             ))}
           </div>
+          <p className="muted small">Own a different edition? <button className="link" onClick={() => ui.go('editor')}>Design your own board</button> and it will appear here.</p>
           <div className="two-col">
             <label className="field">
               <span>Starting cash</span>

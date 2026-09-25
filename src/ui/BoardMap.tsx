@@ -58,15 +58,15 @@ function BoardMap({ game, state, onPick, highlight, stage }: {
       })}
       <div className={`board-center${stage ? ' has-stage' : ''}`}>
         {stage}
-        <p className="display board-wordmark">The Counting House</p>
-        <div className="board-stats">
+        <p className="display board-wordmark">{game.players.length ? 'The Counting House' : b.name}</p>
+        {game.players.length > 0 && <div className="board-stats">
           {game.rules.freeParking && (
             <div><span className="eyebrow">Pot</span><strong className="num">{money(b, state.pot)}</strong><small className="muted">Paid by taxes and fines, won on Free Parking</small></div>
           )}
           <div><span className="eyebrow">Houses left</span><strong className="num">{housesLeft(game, state)}</strong><small className="muted">of {b.houses} in the bank</small></div>
           <div><span className="eyebrow">Hotels left</span><strong className="num">{hotelsLeft(game, state)}</strong><small className="muted">of {b.hotels} in the bank</small></div>
-        </div>
-        {!stage && <p className="muted small">Tap a square to see its deed or record a landing</p>}
+        </div>}
+        {!stage && <p className="muted small">{game.players.length ? 'Tap a square to see its deed or record a landing' : 'Tap a square to edit it'}</p>}
       </div>
     </div>
   )

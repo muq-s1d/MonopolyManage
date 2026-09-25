@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react'
 import type { Entry, Err } from '../engine/types.ts'
 import type { RentOpts } from '../engine/engine.ts'
 
-export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'end'
+export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'editor' | 'end'
 
 export type SheetSpec =
   | { kind: 'landed' }
