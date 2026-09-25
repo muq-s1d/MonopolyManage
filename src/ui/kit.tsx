@@ -13,13 +13,18 @@ export const PLAYER_COLORS = [
 ]
 export const ACCESSORIES = ['Top hat', 'Monocle', 'Cloche', 'Bowler', 'Newsboy cap', 'Flapper band', 'Pearls', 'Bow tie']
 
-/** Dark or light ink, whichever reads better on a hex background (WCAG relative luminance). */
-export function inkOn(hex: string) {
+/** WCAG relative luminance of a #rrggbb colour, 0 (black) to 1 (white). */
+function luminance(hex: string) {
   const n = parseInt(hex.slice(1, 7), 16)
   const lin = (c: number) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
-  const L = 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
-  return L > 0.22 ? '#1B1A17' : '#FFF9EA'
+  return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
 }
+
+/** Dark or light ink, whichever reads better on a hex background. */
+export const inkOn = (hex: string) => (luminance(hex) > 0.22 ? '#1B1A17' : '#FFF9EA')
+
+/** A player colour as a line or underline: pale colours (Pearl) are deepened toward the ink on the paper theme. */
+export const readable = (hex: string) => (luminance(hex) > 0.55 ? `color-mix(in srgb, ${hex}, var(--ink) var(--pale-mix))` : hex)
 
 export function rng(seed: number) {
   return () => {
@@ -62,7 +67,7 @@ export function Seal({ player, size = 56, initial = true }: { player: Player; si
     <svg className="seal" width={size} height={size} viewBox="0 0 100 100" aria-hidden="true">
       <circle cx="50" cy="50" r="48" fill="var(--surface-2)" stroke="var(--brass)" strokeWidth="1.5" />
       <circle cx="50" cy="50" r="45.5" fill="none" stroke="var(--brass)" strokeWidth="0.5" strokeDasharray="1 1.6" />
-      <g fill="none" stroke={player.color} strokeLinejoin="round">
+      <g fill="none" style={{ stroke: readable(player.color) }} strokeLinejoin="round">
         <path d={a} strokeWidth="0.7" />
         <path d={b} strokeWidth="0.6" opacity="0.85" />
         <path d={c} strokeWidth="0.55" opacity="0.9" />
