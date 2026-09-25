@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="A banker for your physical Monopoly nights. Buying, rent, building, trades and turns, all in the browser." />
+    <meta name="theme-color" content="#0F3B2E" />
+    <title>The Counting House</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800&family=Jost:wght@400;500;600&family=Limelight&display=swap" />
+    <script>
+      try { const t = JSON.parse(localStorage.getItem('counting-house.prefs') || '{}').theme; if (t) document.documentElement.dataset.theme = t } catch {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
