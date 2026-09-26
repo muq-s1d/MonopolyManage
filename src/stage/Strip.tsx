@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import type { Game, Party } from '../engine/types.ts'
 import type { Ev } from '../ui/events.ts'
 import Creature from './Creature.tsx'
+import Scene, { Fit } from './Scenes.tsx'
 import { Coins, coinCount, StageLights, useDarkTheme, useReduced, type Flight } from './Stage.tsx'
 
 export type Shown = Ev & { id: number }
@@ -47,14 +48,15 @@ function Moment({ game, ev, reduced }: { game: Game; ev: Shown; reduced: boolean
 }
 
 /** One canvas for every strip, kept alive between moments so a phone compiles its shaders once. */
-export default function Strip({ game, ev }: { game: Game; ev: Shown | null }) {
+export default function Strip({ game, ev, big }: { game: Game; ev: Shown | null; big: boolean }) {
   const reduced = useReduced()
   const dark = useDarkTheme()
   return (
     <Canvas dpr={[1, 2]} frameloop={ev && !reduced ? 'always' : 'demand'} gl={{ alpha: true, antialias: true }}
       camera={{ position: [0, 0.4, 6.5], fov: 26 }} fallback={null}>
       <StageLights dark={dark} />
-      {ev && <Moment key={ev.id} game={game} ev={ev} reduced={reduced} />}
+      {big ? <Fit width={4.8} base={12} /> : <Fit width={5.4} base={6.5} />}
+      {ev && (big ? <Scene key={ev.id} game={game} ev={ev} /> : <Moment key={ev.id} game={game} ev={ev} reduced={reduced} />)}
     </Canvas>
   )
 }

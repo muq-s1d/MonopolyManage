@@ -12,6 +12,7 @@ import { sfx } from './sound.ts'
 import { ThemeToggle, TurnPanel } from './Table.tsx'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
+const Podium = lazy(() => import('../stage/Podium.tsx'))
 
 /** One player's own dashboard on their own phone. Everyone else's money is on the host screen. */
 export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: View; onLeave: () => void }) {
@@ -48,7 +49,13 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
       <Inbox game={game} offers={view.offers} me={me.id} admin={view.admin} answer={live.client.answer} decide={live.client.decide} />
 
       {over ? (
-        <section className="panel phone-card"><h2 className="display">{name(game, active(game, state)[0]?.id ?? me.id)} owns the town</h2><p className="muted">The final standings are on the host screen.</p></section>
+        <section className="panel phone-card">
+          <h2 className="display">{name(game, active(game, state)[0]?.id ?? me.id)} owns the town</h2>
+          {webgl && <Suspense fallback={null}><Podium ranked={game.players
+            .map(p => ({ player: p, bankrupt: state.bankrupt[p.id], w: netWorth(game, state, p.id).total }))
+            .toSorted((a, b) => Number(a.bankrupt) - Number(b.bankrupt) || b.w - a.w)} /></Suspense>}
+          <p className="muted">The full standings are on the host screen.</p>
+        </section>
       ) : state.bankrupt[me.id] ? (
         <section className="panel phone-card"><h2 className="display">You are out of the game</h2><p className="muted">Keep watching the host screen for the finish.</p></section>
       ) : state.turn === me.id ? (

@@ -412,11 +412,13 @@
 .claim-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; width: 100%; }
 .claim-list .ghost { width: 100%; justify-content: flex-start; gap: 0.6rem; }
 
-/* ---------- moments: the animated strip at the top of the screen ---------- */
-.strip { position: fixed; top: 0; left: 0; right: 0; margin-inline: auto; width: min(720px, 100%); z-index: 40; height: 140px; display: grid; grid-template-columns: 1fr; align-items: end;
+/* ---------- moments: the animated strip at the top of the screen, in the top layer ---------- */
+.strip { position: fixed; inset: 0 0 auto; margin: 0 auto; padding: 0; overflow: hidden; color: var(--ink); z-index: 40;
+  width: min(720px, 100%); height: 140px; display: grid; grid-template-columns: 1fr; align-items: end; cursor: pointer;
   background: var(--surface); border: 1px solid var(--line); border-top: 0; border-bottom: 2px solid var(--brass); border-radius: 0 0 16px 16px; box-shadow: var(--shadow);
-  transform: translateY(-110%); transition: transform var(--t-mid) var(--ease-out); pointer-events: none; cursor: pointer; }
-.strip.on { transform: none; pointer-events: auto; }
+  transition: transform var(--t-mid) var(--ease-out); pointer-events: none; }
+.strip.big { pointer-events: auto; } /* strips never eat a tap meant for the sheet below; big scenes are tap to skip */
+@starting-style { .strip:popover-open { transform: translateY(-110%); } }
 .strip.paid { border-bottom-color: var(--danger); }
 .strip.got { border-bottom-color: var(--ok); }
 .strip-stage { position: absolute; inset: 0 0 34px; display: grid; place-items: center; }
@@ -427,3 +429,11 @@
 .strip-text span { font-size: 0.8rem; color: var(--ink-2); max-width: 70ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @keyframes strip-pop { from { transform: scale(0.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .strip { transition: none; } .strip-seals { animation: none; } }
+/* big moments fill the screen; the headline sits at the top so a toast never covers it */
+.strip.big { width: 100%; height: 100dvh; border-radius: 0; border: 0; align-items: start; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px); }
+.strip.big .strip-stage { inset: 130px 0 0; }
+.strip.big .strip-text { padding-top: max(28px, env(safe-area-inset-top)); gap: 0.3rem; }
+.strip.big .strip-text span { white-space: normal; font-size: 0.95rem; max-width: 36ch; }
+.strip.big .strip-text strong { font: 400 clamp(1.8rem, 5vw, 3rem)/1.1 var(--f-display); color: var(--brass-hi); }
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .strip.big .strip-text strong { color: var(--ink); } }
+:root[data-theme='light'] .strip.big .strip-text strong { color: var(--ink); }
