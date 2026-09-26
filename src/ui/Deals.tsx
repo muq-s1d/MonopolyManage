@@ -15,14 +15,14 @@ const TABS: { id: DealTab; label: string }[] = [
 ]
 
 /** The sticky bar at the bottom of each tab: what will happen, and the button that does it. */
-function Foot({ result, label, extra }: { result: ReturnType<typeof E.trade>; label: string; extra?: ReactNode }) {
+function Foot({ result, act, label, extra }: { result: ReturnType<typeof E.trade>; act: () => Promise<boolean>; label: string; extra?: ReactNode }) {
   const ui = useUI()
   const err = E.isErr(result)
   return (
     <div className="deal-foot">
       <p className={`trade-summary ${err ? 'muted' : ''}`}>{err ? result.error : result.memo}</p>
       {extra}
-      <button className="plaque big" disabled={err} onClick={() => { if (ui.act(result)) ui.close() }}>{label}</button>
+      <button className="plaque big" disabled={err} onClick={async () => { if (await act()) ui.close() }}>{label}</button>
     </div>
   )
 }
@@ -108,6 +108,7 @@ function TradePanel({ game, state }: Props) {
   const [get, setGet] = useState(emptySide)
   const side = (s: SideState) => ({ cells: s.cells, cash: s.cash || 0, jailCards: s.jailCards })
   const result = useMemo(() => (a && bId && a !== bId ? E.trade(game, state, a, bId, side(give), side(get)) : { error: 'Pick two different players' }), [game, state, a, bId, give, get])
+  const ui = useUI()
   return (
     <>
       <p className="muted deal-help">Tick what each player hands over. Either side can add money too.</p>
@@ -117,7 +118,7 @@ function TradePanel({ game, state }: Props) {
         <TradeSide game={game} state={state} pid={bId} setPid={id => { setB(id); setGet(emptySide()) }} side={get} set={setGet} choices={players} label="Second player" />
       </div>
       {game.rules.mortgageInterest && <p className="muted small">Getting a mortgaged property? The new owner pays the bank a 10% fee on its mortgage right away.</p>}
-      <Foot result={result} label="Shake on it" />
+      <Foot result={result} act={() => ui.act('trade', a, bId, side(give), side(get))} label="Shake on it" />
     </>
   )
 }
@@ -144,7 +145,7 @@ function PactCard({ game, state, pact, onEdit }: Props & { pact: Pact; onEdit: (
         <span className="confirm-inline" role="alert">
           {d.refund ? `Buildings go back to the bank for ${E.money(game.board, d.refund)}, split by shares.` : 'No buildings to sell.'}
           <button className="ghost" onClick={() => setEnding(false)}>Keep it</button>
-          <button className="plaque danger" onClick={() => ui.act(D.endPact(game, state, pact.id))}>Dissolve</button>
+          <button className="plaque danger" onClick={() => ui.act('endPact', pact.id)}>Dissolve</button>
         </span>
       ) : (
         <span className="btn-row tight">
@@ -157,6 +158,7 @@ function PactCard({ game, state, pact, onEdit }: Props & { pact: Pact; onEdit: (
 }
 
 function PactPanel({ game, state }: Props) {
+  const ui = useUI()
   const players = E.active(game, state)
   const pacts = Object.values(state.pacts)
   const [editing, setEditing] = useState<string | undefined>()
@@ -244,7 +246,7 @@ function PactPanel({ game, state }: Props) {
       <Switch label="Allies pay rent" help="Off: allies stay free on the pact's deeds. On: they pay, and the rent goes to the other allies by share."
         checked={allyRent === 'paid'} onChange={v => setAllyRent(v ? 'paid' : 'free')} />
 
-      <Foot result={result} label={editing ? 'Save the pact' : 'Sign the pact'} extra={editing && <button className="ghost" onClick={reset}>Cancel edit</button>} />
+      <Foot result={result} act={() => ui.act('formPact', draft, editing)} label={editing ? 'Save the pact' : 'Sign the pact'} extra={editing && <button className="ghost" onClick={reset}>Cancel edit</button>} />
     </>
   )
 }
@@ -278,8 +280,8 @@ function LoanPanel({ game, state }: Props) {
                     <span className={`small ${due ? 'danger' : 'muted'}`}>{due ? `Due now (round ${l.dueRound})` : `Due by round ${l.dueRound}`}. Borrowed {m(l.amount)}.</span>
                   </div>
                   <span className="btn-row tight">
-                    <button className="ghost" onClick={() => ui.act(D.repayLoan(game, state, l.id))}>Repay {m(l.repay)}</button>
-                    <button className="ghost" onClick={() => ui.act(D.forgiveLoan(game, state, l.id))}>Forgive</button>
+                    <button className="ghost" onClick={() => ui.act('repayLoan', l.id)}>Repay {m(l.repay)}</button>
+                    <button className="ghost" onClick={() => ui.act('forgiveLoan', l.id)}>Forgive</button>
                   </span>
                 </li>
               )
@@ -307,7 +309,7 @@ function LoanPanel({ game, state }: Props) {
         </label>
       </div>
       <p className="muted small deal-help">Interest is added once. When the due round arrives, the table reminds the borrower on their turn.</p>
-      <Foot result={result} label="Hand over the money" />
+      <Foot result={result} act={() => ui.act('lend', d)} label="Hand over the money" />
     </>
   )
 }
@@ -324,7 +326,8 @@ function PassPanel({ game, state }: Props) {
   const [landings, setLandings] = useState<number | ''>(2)
   const [price, setPrice] = useState<number | ''>('')
   const scopes = ['all', ...ALL_GROUPS(game).filter(gr => E.cellsOfGroup(game.board, gr).some(i => state.owner[i] === grantor && !E.pactFor(game, state, i)))]
-  const result = D.grantPass(game, state, { holder, grantor, group: scopes.includes(group) ? group : 'all', landings: Number(landings) || 0, price: Number(price) || 0 })
+  const pass: D.PassDraft = { holder, grantor, group: scopes.includes(group) ? group : 'all', landings: Number(landings) || 0, price: Number(price) || 0 }
+  const result = D.grantPass(game, state, pass)
   return (
     <>
       {passes.length > 0 && (
@@ -337,7 +340,7 @@ function PassPanel({ game, state }: Props) {
                   <strong>{who(game, im.holder).name} lands free on {who(game, im.grantor).name}'s {im.group === 'all' ? 'deeds' : `${E.groupLabel(game.board, im.group)} deeds`}</strong>
                   <span className="muted small">{im.landings} free {im.landings === 1 ? 'landing' : 'landings'} left</span>
                 </div>
-                <button className="ghost" onClick={() => ui.act(D.cancelPass(game, state, im.id))}>Cancel</button>
+                <button className="ghost" onClick={() => ui.act('cancelPass', im.id)}>Cancel</button>
               </li>
             ))}
           </ul>
@@ -365,7 +368,7 @@ function PassPanel({ game, state }: Props) {
         </label>
       </div>
       <p className="muted small deal-help">Each landing on a covered deed uses one pass instead of paying rent. Deeds pooled in a pact are not covered, so shared rent stays fair.</p>
-      <Foot result={result} label="Sell the pass" />
+      <Foot result={result} act={() => ui.act('grantPass', pass)} label="Sell the pass" />
     </>
   )
 }

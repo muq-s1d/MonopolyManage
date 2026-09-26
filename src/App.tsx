@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isErr } from './engine/engine.ts'
-import type { Entry, Err } from './engine/types.ts'
+import { run } from './engine/actions.ts'
 import { prefs, store, useSnap } from './store.ts'
 import { UICtx, type Screen, type SheetSpec, type UI } from './ui/ctx.ts'
 import Lobby from './ui/Lobby.tsx'
@@ -62,7 +62,10 @@ export default function App() {
       sfx('undo')
       show({ text: 'Undid the last entry' }, 4000)
     },
-    act: (x: Entry | Err) => {
+    act: async (name, ...args) => {
+      const s = store.get()
+      if (!s) return false
+      const x = run(s.game, s.state, name, ...args)
       if (isErr(x)) {
         sfx('error')
         const who = x.who
