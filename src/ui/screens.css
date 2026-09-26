@@ -203,6 +203,34 @@
 .stack > * + * { margin-top: 0.9rem; }
 .panel h2.display:not(:first-child) { margin-top: 1.5rem; }
 
+/* ---------- deals ---------- */
+.deal-tabs { margin-bottom: 1rem; }
+.deal-foot {
+  position: sticky; bottom: -1.5rem; z-index: 2; margin: 1.25rem -1.5rem -1.5rem; padding: 0.9rem 1.5rem;
+  display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: flex-end;
+  background: var(--surface); border-top: 1px solid var(--line-soft); box-shadow: 0 -12px 14px -12px rgb(0 0 0 / 0.35);
+}
+.deal-foot .trade-summary { flex: 1 1 280px; }
+.deal-help { margin: 0.25rem 0 0.75rem; max-width: 68ch; }
+.field-label { font: 600 0.76rem/1.2 var(--f-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); margin: 1rem 0 0.45rem; display: flex; gap: 0.75rem; align-items: baseline; }
+.set-chip { gap: 0.45rem; }
+.set-chip small { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; align-items: end; }
+.deal-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
+.deal-card { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem; padding: 0.7rem 0.85rem; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 12px; }
+.deal-card-main { display: grid; gap: 0.25rem; min-width: 0; flex: 1 1 260px; }
+.deal-members { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; }
+.deal-member { display: inline-flex; align-items: center; gap: 0.35rem; }
+.deal-lines { margin: 0.25rem 0 0.75rem; padding-left: 1.1rem; display: grid; gap: 0.35rem; }
+.pact-line { display: block; }
+.pact-tag { border-color: var(--brass); color: var(--brass-hi); }
+:root[data-theme='light'] .pact-tag { color: var(--brass); }
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .pact-tag { color: var(--brass); } :root:not([data-theme='dark']) .cell.pooled::after { border-color: var(--brass); } }
+.due-box { margin-top: 0.5rem; padding: 0.6rem 0.75rem; border: 1px solid var(--brass); border-radius: 12px; background: color-mix(in srgb, var(--brass) 10%, transparent); }
+.due-box .btn-row { margin-top: 0.4rem; }
+.cell.pooled::after { content: ''; position: absolute; inset: 3px; border: 1.5px dashed var(--brass-hi); border-radius: 5px; pointer-events: none; }
+:root[data-theme='light'] .cell.pooled::after { border-color: var(--brass); }
+
 /* ---------- ledger ---------- */
 .ledger-help { margin: 1rem 0; max-width: 70ch; }
 .ledger-list { list-style: none; margin: 0; padding: 0; display: grid; }

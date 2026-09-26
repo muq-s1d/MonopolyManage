@@ -1,11 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import * as E from '../engine/engine.ts'
+import * as D from '../engine/deals.ts'
 import type { Board, Card, Cell, Game, Party, Player, State } from '../engine/types.ts'
 import { download, prefs, store, type Snap } from '../store.ts'
 import { shortName } from './BoardMap.tsx'
 import { useUI, type SheetSpec } from './ctx.ts'
 import { inkOn, Money, Pips, Seal, Sheet, Switch } from './kit.tsx'
 import { sfx } from './sound.ts'
+import DealsSheet from './Deals.tsx'
 
 type Props = { game: Game; state: State }
 const who = (g: Game, id: string) => g.players.find(p => p.id === id)!
@@ -19,7 +21,7 @@ export default function Sheets({ spec, snap }: { spec: SheetSpec; snap: NonNulla
     case 'card': return <CardSheet {...p} deck={spec.deck} />
     case 'nearest': return <NearestSheet {...p} type={spec.type} />
     case 'portfolio': return <Portfolio {...p} pid={spec.player} />
-    case 'trade': return <TradeSheet {...p} />
+    case 'deals': return <DealsSheet {...p} tab={spec.tab} />
     case 'payment': return <PaymentSheet {...p} />
     case 'bankrupt': return <BankruptSheet {...p} pid={spec.player} creditor={spec.creditor} />
     case 'menu': return <MenuSheet {...p} />
@@ -109,6 +111,7 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
   const b = game.board, c = b.cells[cell], m = (n: number) => E.money(b, n)
   const p = who(game, state.turn)
   const owner = state.owner[cell]
+  const held = owner ? E.pactFor(game, state, cell) : null
   const [dice, setDice] = useState<number | ''>('')
   const [auction, setAuction] = useState(false)
   const [bidder, setBidder] = useState(p.id)
@@ -152,8 +155,12 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
   } else if (ownable && owner) {
     const needDice = c.kind === 'utility'
     const r = E.rent(game, state, cell, { ...opts, dice: dice || undefined })
+    const split = E.rentSplit(game, state, p.id, cell, r.amount)
+    const payees = typeof split === 'string' ? [] : Object.entries(split).filter(([, v]) => v > 0)
+    const pact = E.pactFor(game, state, cell)
+    const pass = D.passFor(game, state, p.id, cell)
     const short = r.amount - state.cash[p.id]
-    action = (
+    action = typeof split === 'string' ? <p>{split}.</p> : (
       <>
         {needDice && (
           <label className="field dice-field">
@@ -164,11 +171,14 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
         )}
         {(!needDice || dice) ? (
           <>
-            <p className="rent-line"><span>{p.name} owes {who(game, owner).name}</span> <strong className="num big-num">{m(r.amount)}</strong></p>
+            <p className="rent-line"><span>{p.name} owes {payees.length > 1 && pact ? `the ${E.pactName(b, pact)}` : who(game, payees[0]?.[0] ?? owner).name}</span> <strong className="num big-num">{m(r.amount)}</strong></p>
             <p className="muted">{r.why}.</p>
-            {short > 0 && <p className="danger">{p.name} is {m(short)} short.</p>}
+            {payees.length > 1 && <p className="muted">Split by shares: {payees.map(([id, v]) => `${who(game, id).name} ${m(v)}`).join(', ')}.</p>}
+            {pass && <p>{p.name} holds a free rent pass here: {pass.landings} {pass.landings === 1 ? 'landing' : 'landings'} left.</p>}
+            {short > 0 && !pass && <p className="danger">{p.name} is {m(short)} short.</p>}
             <div className="btn-row">
-              <button className="plaque big" disabled={r.amount === 0 || short > 0} onClick={() => done(ui.act(E.payRent(game, state, p.id, cell, { ...opts, dice: dice || undefined })))}>Pay {m(r.amount)} rent</button>
+              {pass && <button className="plaque big" onClick={() => done(ui.act(D.usePass(game, state, pass.id, cell)))}>Use a free landing</button>}
+              <button className={pass ? 'ghost' : 'plaque big'} disabled={r.amount === 0 || short > 0} onClick={() => done(ui.act(E.payRent(game, state, p.id, cell, { ...opts, dice: dice || undefined })))}>{pass ? 'Pay anyway' : `Pay ${m(r.amount)} rent`}</button>
               {short > 0 && <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>}
               {short > 0 && <button className="ghost danger" onClick={() => ui.open({ kind: 'bankrupt', player: p.id, creditor: owner })}>Declare bankruptcy</button>}
             </div>
@@ -216,7 +226,9 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
             {owner && (
               <div className="owner-line">
                 <Seal player={who(game, owner)} size={36} />
-                <span>Owned by <strong>{who(game, owner).name}</strong>{state.mortgaged[cell] ? ', mortgaged' : ''}</span>
+                <span>Owned by <strong>{who(game, owner).name}</strong>{state.mortgaged[cell] ? ', mortgaged' : ''}
+                  {held && <small className="muted pact-line">Held in the {E.pactName(b, held)}: {held.members.map(id => `${who(game, id).name} ${held.shares[id]}%`).join(', ')}</small>}
+                </span>
                 <Pips level={state.level[cell]} />
               </div>
             )}
@@ -334,6 +346,7 @@ function DeedRow({ game, state, cell }: Props & { cell: number }) {
   const canS = c.kind === 'property' ? E.canSell(game, state, cell) : 'x'
   const lvl = state.level[cell]
   const mort = state.mortgaged[cell]
+  const pooled = E.pactFor(game, state, cell)
   return (
     <div className="deed-row">
       <i className="swatch tall" style={{ background: band ?? 'var(--line)' }} />
@@ -342,6 +355,7 @@ function DeedRow({ game, state, cell }: Props & { cell: number }) {
         <span className="muted small">
           {mort ? 'Mortgaged, earns no rent' : c.kind === 'property' ? (lvl === 5 ? 'Hotel' : lvl ? `${lvl} ${lvl === 1 ? 'house' : 'houses'}` : 'No buildings') : c.kind === 'railroad' ? 'Railroad' : 'Utility'}
         </span>
+        {pooled && <span className="muted small">{who(game, state.owner[cell]!).name}'s deed, pooled in the {E.pactName(b, pooled)}</span>}
         {c.kind === 'property' && canB && !mort && lvl < 5 && <span className="muted small">{canB}</span>}
       </div>
       <Pips level={lvl} />
@@ -369,7 +383,8 @@ function DeedRow({ game, state, cell }: Props & { cell: number }) {
 function Portfolio({ game, state, pid }: Props & { pid: string }) {
   const ui = useUI()
   const b = game.board, p = who(game, pid), w = E.netWorth(game, state, pid)
-  const owned = b.cells.map((_, i) => i).filter(i => state.owner[i] === pid)
+  // their own deeds, plus allies' deeds pooled with them, so a shared set can be built evenly from one place
+  const owned = b.cells.map((_, i) => i).filter(i => state.owner[i] === pid || E.pactFor(game, state, i)?.members.includes(pid))
   const order = (i: number) => {
     const c = b.cells[i]
     return c.kind === 'property' ? b.groups.findIndex(g => g.id === c.group) : c.kind === 'railroad' ? 100 : 200
@@ -380,96 +395,48 @@ function Portfolio({ game, state, pid }: Props & { pid: string }) {
       foot={state.bankrupt[pid] ? undefined : (
         <>
           <button className="ghost danger" onClick={() => ui.open({ kind: 'bankrupt', player: pid })}>Declare bankruptcy</button>
-          <button className="ghost" onClick={() => ui.open({ kind: 'trade' })}>Trade</button>
+          <button className="ghost" onClick={() => ui.open({ kind: 'deals' })}>Deals</button>
           <button className="plaque" onClick={ui.close}>Done</button>
         </>
       )}>
       <dl className="worth">
         <div><dt>Cash</dt><dd><Money value={w.cash} cur={b.currency} /></dd><p className="muted small">Money in hand right now.</p></div>
         <div><dt>Could raise</dt><dd className="num">{E.money(b, w.raisable)}</dd><p className="muted small">Cash plus what the bank pays for every building sold and every deed mortgaged.</p></div>
-        <div><dt>Net worth</dt><dd className="num">{E.money(b, w.total)}</dd><p className="muted small">Cash, deeds at printed price (half if mortgaged) and buildings at cost. Final standings use this.</p></div>
+        <div><dt>Net worth</dt><dd className="num">{E.money(b, w.total)}</dd><p className="muted small">Cash, deeds at printed price (half if mortgaged), buildings at cost (by share in a pact), plus loans owed to you minus loans you owe. Final standings use this.</p></div>
         <div><dt>Jail cards</dt><dd className="num">{state.jailCards[pid]}</dd><p className="muted small">Get out of jail free cards held.</p></div>
       </dl>
       <hr className="rule" />
       {sorted.length === 0 ? <p className="muted">{p.name} owns no deeds yet.</p> : sorted.map(i => <DeedRow key={i} game={game} state={state} cell={i} />)}
+      <PlayerDeals game={game} state={state} pid={pid} />
     </Sheet>
   )
 }
 
-// ---------- trade ----------
-
-type SideState = { cells: number[]; cash: number | ''; jailCards: number }
-const emptySide = (): SideState => ({ cells: [], cash: '', jailCards: 0 })
-
-function TradeSide({ game, state, pid, side, set, choices, setPid, label }: Props & {
-  pid: string; side: SideState; set: (s: SideState) => void; choices: Player[]; setPid: (id: string) => void; label: string
-}) {
-  const b = game.board
-  const owned = b.cells.map((_, i) => i).filter(i => state.owner[i] === pid)
-  const built = (i: number) => {
-    const c = b.cells[i]
-    return c.kind === 'property' && E.groupCells(b, c.group!).some(k => state.level[k] > 0)
-  }
-  return (
-    <fieldset className="trade-side">
-      <legend className="eyebrow">{label}</legend>
-      <select className="input" value={pid} onChange={e => setPid(e.target.value)} aria-label={`${label} player`}>
-        {choices.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-      </select>
-      <ul className="trade-deeds">
-        {owned.map(i => {
-          const blocked = built(i)
-          return (
-            <li key={i}>
-              <label className={blocked ? 'disabled' : ''}>
-                <input type="checkbox" disabled={blocked} checked={side.cells.includes(i)}
-                  onChange={e => set({ ...side, cells: e.target.checked ? [...side.cells, i] : side.cells.filter(x => x !== i) })} />
-                <i className="swatch" style={{ background: b.groups.find(g => g.id === b.cells[i].group)?.color ?? 'var(--line)' }} />
-                <span>{shortName(b.cells[i].name)}{state.mortgaged[i] ? ' (mortgaged)' : ''}</span>
-                {blocked && <small className="muted">sell buildings first</small>}
-              </label>
-            </li>
-          )
-        })}
-        {owned.length === 0 && <li className="muted small">No deeds to offer.</li>}
-      </ul>
-      <label className="field"><span>Cash (has {E.money(b, state.cash[pid])})</span>
-        <input className="input num" type="number" inputMode="numeric" min={0} value={side.cash}
-          onChange={e => set({ ...side, cash: e.target.value === '' ? '' : Math.max(0, Math.floor(+e.target.value)) })} />
-      </label>
-      {state.jailCards[pid] > 0 && (
-        <label className="field"><span>Jail cards (has {state.jailCards[pid]})</span>
-          <input className="input num" type="number" min={0} max={state.jailCards[pid]} value={side.jailCards}
-            onChange={e => set({ ...side, jailCards: Math.min(state.jailCards[pid], Math.max(0, Math.floor(+e.target.value))) })} />
-        </label>
-      )}
-    </fieldset>
-  )
-}
-
-function TradeSheet({ game, state }: Props) {
+/** Pacts, loans and passes this player is part of. Renders nothing when there are none. */
+function PlayerDeals({ game, state, pid }: Props & { pid: string }) {
   const ui = useUI()
-  const players = E.active(game, state)
-  const [a, setA] = useState(state.turn)
-  const [bId, setB] = useState(players.find(x => x.id !== state.turn)?.id ?? '')
-  const [give, setGive] = useState(emptySide)
-  const [get, setGet] = useState(emptySide)
-  const side = (s: SideState) => ({ cells: s.cells, cash: s.cash || 0, jailCards: s.jailCards })
-  const result = useMemo(() => (a && bId && a !== bId ? E.trade(game, state, a, bId, side(give), side(get)) : { error: 'Pick two different players' }), [game, state, a, bId, give, get])
-  const pickA = (id: string) => { setA(id); setGive(emptySide()) }
-  const pickB = (id: string) => { setB(id); setGet(emptySide()) }
+  const b = game.board, m = (n: number) => E.money(b, n), nm = (id: string) => who(game, id).name
+  const pacts = Object.values(state.pacts).filter(x => x.members.includes(pid))
+  const loans = D.loansOf(state, pid)
+  const passes = Object.values(state.immunities).filter(x => x.holder === pid || x.grantor === pid)
+  if (!pacts.length && !loans.length && !passes.length) return null
   return (
-    <Sheet eyebrow="Between players" title="Trade" onClose={ui.close} wide
-      foot={<>
-        <p className={`trade-summary ${E.isErr(result) ? 'muted' : ''}`}>{E.isErr(result) ? result.error : result.memo}</p>
-        <button className="plaque big" disabled={E.isErr(result)} onClick={() => { if (ui.act(result)) ui.close() }}>Shake on it</button>
-      </>}>
-      <div className="trade-grid">
-        <TradeSide game={game} state={state} pid={a} setPid={pickA} side={give} set={setGive} choices={players} label="Gives" />
-        <TradeSide game={game} state={state} pid={bId} setPid={pickB} side={get} set={setGet} choices={players} label="In return for" />
-      </div>
-      {game.rules.mortgageInterest && <p className="muted small">Receiving a mortgaged deed costs 10% of its mortgage value to the bank straight away.</p>}
-    </Sheet>
+    <section aria-labelledby="deals-h">
+      <hr className="rule" />
+      <p id="deals-h" className="eyebrow">Deals</p>
+      <ul className="deal-lines">
+        {pacts.map(x => (
+          <li key={x.id}>In the <strong>{E.pactName(b, x)}</strong> with {x.members.filter(id => id !== pid).map(nm).join(' and ')}: a {x.shares[pid]}% share of its rent, building costs and refunds.</li>
+        ))}
+        {loans.map(l => (
+          <li key={l.id}>{l.borrower === pid ? `Owes ${nm(l.lender)} ${m(l.repay)}` : `${nm(l.borrower)} owes ${nm(pid)} ${m(l.repay)}`} by round {l.dueRound}{state.round >= l.dueRound ? ', due now' : ''}.</li>
+        ))}
+        {passes.map(x => (
+          <li key={x.id}>{x.holder === pid ? `Lands free on ${nm(x.grantor)}'s` : `${nm(x.holder)} lands free on ${nm(pid)}'s`} {x.group === 'all' ? 'deeds' : `${E.groupLabel(b, x.group)} deeds`}: {x.landings} {x.landings === 1 ? 'landing' : 'landings'} left.</li>
+        ))}
+      </ul>
+      <button className="ghost" onClick={() => ui.open({ kind: 'deals', tab: pacts.length ? 'pact' : loans.length ? 'loan' : 'pass' })}>Manage deals</button>
+    </section>
   )
 }
 
