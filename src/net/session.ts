@@ -41,7 +41,10 @@ export type Link = {
  */
 export function connect(code: string, me: string, onMsg: (m: Msg) => void, onStatus: (up: boolean) => void, onPresence: () => void): Promise<Link> {
   if (!SB_URL || !KEY) return Promise.reject(new Error('Sessions are not set up on this site'))
-  const client = new RealtimeClient(`${SB_URL.replace(/^http/, 'ws')}/realtime/v1`, { params: { apikey: KEY } })
+  // the default backs off to 10 s between tries, so a phone back from a tunnel waited half a minute; a failed try is cheap
+  const client = new RealtimeClient(`${SB_URL.replace(/^http/, 'ws')}/realtime/v1`, {
+    params: { apikey: KEY }, reconnectAfterMs: (tries: number) => [500, 1000, 2000][tries - 1] ?? 3000,
+  })
   const ch: RealtimeChannel = client.channel(`session:${code}`, { config: { broadcast: { ack: true }, presence: { key: me } } })
   ch.on('broadcast', { event: 'm' }, ({ payload }) => onMsg(payload as Msg))
   ch.on('presence', { event: 'sync' }, onPresence)
