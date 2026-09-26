@@ -3,6 +3,19 @@ export type Release = { version: string; date: string; title: string; items: { l
 
 export const RELEASES: Release[] = [
   {
+    version: '1.2.0',
+    date: '2026-09-26',
+    title: 'Everyone on their own phone',
+    items: [
+      { lead: 'Host a session', text: 'The host screen shows a QR code and a five letter code. Players join from their own phones and pick a name, a colour and a creature.' },
+      { lead: 'Your own dashboard', text: 'Each phone shows your creature, your cash and your net worth, with your turn buttons when it is your go.' },
+      { lead: 'Pay your own rent', text: 'The player who landed taps Pay. The payer sees money leave, the owner sees it arrive.' },
+      { lead: 'The host approves', text: 'Deals go to the other player, then the host. Undo and bankruptcy wait for the host.' },
+      { lead: 'Cartoon moments', text: 'Every notable event plays a short animation and a sound on every device. Big ones get a full screen scene you can tap to skip.' },
+      { lead: 'Back in one tap', text: 'A reloaded phone keeps its seat, and a reopened host screen resumes the session.' },
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-09-26',
     title: 'Deals between players',

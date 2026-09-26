@@ -4,7 +4,7 @@
 
 A banker for physical Monopoly nights. The board, dice, pieces and cards stay on the table. One laptop or tablet sits beside it, the admin records what happened, and the app moves the money, tracks deeds, houses, jail and turns, and keeps a ledger that can be undone.
 
-No paper money to count, no rent tables to squint at, no banker mistakes.
+No paper money to count, no rent tables to squint at, no banker mistakes. Or, new in 1.2, host a session and everyone plays from their own phone.
 
 ![The table with four players](docs/table.jpg)
 
@@ -47,10 +47,30 @@ New in 1.1. Open **Deals** on the table for four kinds of agreement:
 
 Deals are a house rule, so they can be switched off when seating a new table. The app shows what's new in a short popup the first time you open it after each release, and the full release notes are in the lobby and the menu.
 
+## Sessions: everyone on their own phone
+
+New in 1.2. Tap **Host a session** in the lobby. The host screen becomes the big shared display, with a QR code and a five letter code. Players scan it (or tap **Join a session** and type the code), pick a name, a free colour and a creature, and appear on the host screen as they sit down. The host can still add players without a phone and take their turns on the big screen. When setting up, the host chooses where they play: on the big screen, on their own phone (a second QR code, which also gets the approval inbox), or not at all.
+
+![Seating a session: the QR code, the code, and players joining from their phones](docs/session-setup.jpg)
+
+- **Your own dashboard.** Each phone shows only that player: their creature, cash, net worth, the turn buttons on their turn, and building, mortgaging, payments and deals at any time. Everyone else's money is on the host screen.
+- **You pay your own rent.** The player who landed taps Pay. The payer sees and hears money going out, the owner hears it coming in, and the host screen shows the table what happened.
+- **The host approves the risky things.** Trades, pacts, loans and free rent passes go to the other player first, then to the host. Undo, bankruptcy and money from the bank or other players wait for the host alone.
+- **Moments.** Every notable event plays a short animated strip on every device, and the big ones (buying, a hotel, jail, a pact, a trade, the jackpot, bankruptcy, the winner) get a short full screen scene you can tap to skip. They can be switched off in the menu, and they are available in the one-screen mode too, off by default.
+- **Reloads and dead batteries.** A phone keeps its seat, so a reload drops you straight back in. A new phone can take an existing seat once the host agrees. Reopening the host screen offers **Resume session** and the phones reconnect by themselves.
+
+![Riva's phone: her creature, her cash, and a trade from Otto waiting for her answer](docs/session-phone.jpg)
+
+![The host screen during a session: phone marks on each player and the requests tray](docs/session-table.jpg)
+
+Sessions run over [Supabase Realtime](https://supabase.com/docs/guides/realtime): every message is a secure WebSocket on port 443, like ordinary web browsing, so it should work on mobile data and on campus Wi-Fi that blocks devices from talking to each other. There is no server of ours: the host screen is the bank, it checks every request from a phone against the same rules engine, and phones only ever ask. Sessions are meant for friends at one table. The session code is the only key, so anyone who knows it could listen in.
+
 ## How it works
 
 - `src/engine/` holds the whole game. Every action is a ledger entry made of small operations (transfer, own, build, mortgage, jail, turn), and the current state is replayed from the ledger. Undo is dropping the last entry, and replaying always gives the same numbers.
 - `src/engine/deals.ts` adds pacts, loans and free rent passes on top of the same ledger, so every deal can be undone like any other entry.
+- `src/engine/actions.ts` names every ledger action, so the same call runs locally or travels from a phone to the host.
+- `src/net/` is the lazy loaded session code: the Supabase channel, the host that seats players, checks each request against the permission table in `rules.ts` and broadcasts ledger changes, and the phone's read only copy. The one-screen mode never downloads it.
 - `src/releases.ts` holds the release notes shown in the app.
 - `src/ui/` is the React interface, written in plain CSS with a Gilded Deco theme in felt night and banknote paper variants.
 - `src/stage/` is the lazy loaded three.js scene with procedural creatures, so the rest of the app loads fast and still works without WebGL.
