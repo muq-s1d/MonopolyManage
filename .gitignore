@@ -3,3 +3,5 @@ dist
 .vercel
 *.local
 .env*
+graphify-out/
+.claude/settings.local.json
