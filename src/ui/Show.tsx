@@ -22,7 +22,6 @@ const same = (a?: Entry, b?: Entry) => !!a && !!b && a.at === b.at && a.memo ===
  */
 export default function Show({ game, entries, me, voiced }: { game: Game; entries: Entry[]; me: string | null; voiced: boolean }) {
   const [queue, setQueue] = useState<Shown[]>([])
-  const [used, setUsed] = useState(false) // the strip's canvas is created on the first moment and then kept
   const prev = useRef<{ game: string; entries: Entry[] } | null>(null)
   const seq = useRef(0)
 
@@ -49,7 +48,6 @@ export default function Show({ game, entries, me, voiced }: { game: Game; entrie
     }
     if (!add.length) return
     if (!show) { if (voiced) add.forEach(ev => sfx(ev.sound)); return }
-    setUsed(true)
     setQueue(q => [...q, ...add])
   }, [game, entries, me, voiced])
 
@@ -57,14 +55,15 @@ export default function Show({ game, entries, me, voiced }: { game: Game; entrie
   const three = webgl && !reducedMotion.matches
   const big = !!current?.big && queue.length <= 3 && three
   const skip = () => setQueue(q => q.slice(1))
-  // a manual popover sits in the top layer, so moments play above an open sheet, like the toast
+  // A manual popover sits in the top layer, so moments play above an open sheet. It stays open and slides
+  // off screen between moments: closing it would hide the canvas, which then starts each moment unsized and blank.
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = box.current
     if (!el?.showPopover) return
-    if (el.matches(':popover-open')) el.hidePopover()
-    if (current) el.showPopover()
-  }, [current?.id, big]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (el.matches(':popover-open')) el.hidePopover() // reopened in the same task: raised above any newer sheet, never laid out hidden
+    el.showPopover()
+  }, [current?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!current) return
     if (voiced) sfx(current.sound)
@@ -73,10 +72,9 @@ export default function Show({ game, entries, me, voiced }: { game: Game; entrie
     return () => clearTimeout(t)
   }, [current?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!used) return null
   const cast = current ? [...new Set([current.from, current.to, current.actor])].flatMap(id => game.players.filter(p => p.id === id)).slice(0, 2) : []
   return (
-    <div ref={box} popover="manual" className={`strip${big ? ' big' : ''}${current?.view === 'me-paid' ? ' paid' : current?.view === 'me-got' ? ' got' : ''}`}
+    <div ref={box} popover="manual" className={`strip${current ? '' : ' idle'}${big ? ' big' : ''}${current?.view === 'me-paid' ? ' paid' : current?.view === 'me-got' ? ' got' : ''}`}
       onClick={skip} role="status" aria-live="polite">
       <div className="strip-stage" aria-hidden="true">
         {three ? <Suspense fallback={null}><Strip game={game} ev={current} big={big} /></Suspense>
