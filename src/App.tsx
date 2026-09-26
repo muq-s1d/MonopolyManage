@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isErr } from './engine/engine.ts'
 import type { Entry, Err } from './engine/types.ts'
-import { store, useSnap } from './store.ts'
+import { prefs, store, useSnap } from './store.ts'
 import { UICtx, type Screen, type SheetSpec, type UI } from './ui/ctx.ts'
 import Lobby from './ui/Lobby.tsx'
 import Setup from './ui/Setup.tsx'
@@ -10,6 +10,8 @@ import Ledger from './ui/Ledger.tsx'
 import EndGame from './ui/EndGame.tsx'
 import Sheets from './ui/Sheets.tsx'
 import { sfx, soundFor } from './ui/sound.ts'
+import { ReleaseNotes } from './ui/WhatsNew.tsx'
+import { CURRENT } from './releases.ts'
 
 const BoardEditor = lazy(() => import('./editor/BoardEditor.tsx'))
 
@@ -37,6 +39,9 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(() => (store.get() ? 'table' : 'lobby'))
   const [sheet, setSheet] = useState<SheetSpec | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
+  // release notes pop up on a first visit, and on the first visit after each new release
+  const [notes, setNotes] = useState<'new' | 'all' | null>(() => (prefs.get().seenRelease === CURRENT.version ? null : 'new'))
+  const closeNotes = useCallback(() => { prefs.set({ seenRelease: CURRENT.version }); setNotes(null) }, [])
   const timer = useRef(0)
 
   const show = useCallback((t: Toast, ms: number) => {
@@ -50,6 +55,7 @@ export default function App() {
     open: setSheet,
     close: () => setSheet(null),
     say: text => show({ text }, 4000),
+    notes: () => { setSheet(null); setNotes('all') },
     undo: () => {
       if (!store.get()?.entries.length) return
       store.undo()
@@ -92,6 +98,7 @@ export default function App() {
       {current === 'end' && snap && <EndGame snap={snap} />}
       {current === 'editor' && <Suspense fallback={<p className="loading">Opening the drafting room</p>}><BoardEditor /></Suspense>}
       {sheet && snap && <Sheets spec={sheet} snap={snap} />}
+      {notes && !sheet && <ReleaseNotes all={notes === 'all'} onClose={closeNotes} />}
       {toast && <ToastView toast={toast} />}
     </UICtx.Provider>
   )

@@ -174,6 +174,8 @@ let live: AudioContext | null = null
 
 export function sfx(name: Sfx) {
   if (prefs.get().sound === false) return
+  // browsers refuse audio before the first tap or click; stay quiet until then instead of warning
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return
   try {
     live ??= new AudioContext()
     if (live.state === 'suspended') void live.resume()

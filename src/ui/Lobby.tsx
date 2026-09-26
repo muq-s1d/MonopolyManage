@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { store, useSnap } from '../store.ts'
 import { useUI } from './ctx.ts'
 import { Seal } from './kit.tsx'
+import { LatestNotes } from './WhatsNew.tsx'
 
 export default function Lobby() {
   const ui = useUI()
@@ -39,6 +40,7 @@ export default function Lobby() {
           <input ref={file} type="file" accept="application/json,.json" hidden onChange={e => importFile(e.target.files?.[0])} />
         </div>
         {error && <p className="error-text" role="alert">{error}</p>}
+        <LatestNotes onMore={ui.notes} />
         {snap && (
           <div className="lobby-players" aria-label="Players in the saved game">
             {snap.game.players.map(p => (
