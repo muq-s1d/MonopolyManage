@@ -418,7 +418,7 @@
   background: var(--surface); border: 1px solid var(--line); border-top: 0; border-bottom: 2px solid var(--brass); border-radius: 0 0 16px 16px; box-shadow: var(--shadow);
   transition: transform var(--t-mid) var(--ease-out); pointer-events: none; }
 .strip.big { pointer-events: auto; } /* strips never eat a tap meant for the sheet below; big scenes are tap to skip */
-@starting-style { .strip:popover-open { transform: translateY(-110%); } }
+.strip.idle { transform: translateY(-110%); box-shadow: none; }
 .strip.paid { border-bottom-color: var(--danger); }
 .strip.got { border-bottom-color: var(--ok); }
 .strip-stage { position: absolute; inset: 0 0 34px; display: grid; place-items: center; }
