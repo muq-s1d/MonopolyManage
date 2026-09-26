@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { ArrowLeftRight } from 'lucide-react'
 import * as E from '../engine/engine.ts'
 import * as D from '../engine/deals.ts'
 import type { Game, Pact, Player, State } from '../engine/types.ts'
@@ -61,10 +62,13 @@ function TradeSide({ game, state, pid, side, set, choices, setPid, label }: Prop
   }
   return (
     <fieldset className="trade-side">
-      <legend className="eyebrow">{label}</legend>
-      <select className="input" value={pid} onChange={e => setPid(e.target.value)} aria-label={`${label} player`}>
-        {choices.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
-      </select>
+      <legend className="sr-only">{`${who(game, pid)?.name ?? label} gives`}</legend>
+      <div className="trade-head">
+        <select className="input" value={pid} onChange={e => setPid(e.target.value)} aria-label={`${label}: who gives`}>
+          {choices.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select>
+        <span className="trade-verb">gives</span>
+      </div>
       <ul className="trade-deeds">
         {owned.map(i => {
           const blocked = built(i)
@@ -80,14 +84,14 @@ function TradeSide({ game, state, pid, side, set, choices, setPid, label }: Prop
             </li>
           )
         })}
-        {owned.length === 0 && <li className="muted small">No deeds to offer.</li>}
+        {owned.length === 0 && <li className="muted small">No properties to give.</li>}
       </ul>
-      <label className="field"><span>Cash (has {E.money(b, state.cash[pid])})</span>
+      <label className="field"><span>Money (has {E.money(b, state.cash[pid])})</span>
         <input className="input num" type="number" inputMode="numeric" min={0} value={side.cash}
           onChange={e => set({ ...side, cash: num(e.target.value) })} />
       </label>
       {state.jailCards[pid] > 0 && (
-        <label className="field"><span>Jail cards (has {state.jailCards[pid]})</span>
+        <label className="field"><span>Get out of jail free cards (has {state.jailCards[pid]})</span>
           <input className="input num" type="number" min={0} max={state.jailCards[pid]} value={side.jailCards}
             onChange={e => set({ ...side, jailCards: Math.min(state.jailCards[pid], Math.max(0, Math.floor(+e.target.value))) })} />
         </label>
@@ -106,11 +110,13 @@ function TradePanel({ game, state }: Props) {
   const result = useMemo(() => (a && bId && a !== bId ? E.trade(game, state, a, bId, side(give), side(get)) : { error: 'Pick two different players' }), [game, state, a, bId, give, get])
   return (
     <>
+      <p className="muted deal-help">Tick what each player hands over. Either side can add money too.</p>
       <div className="trade-grid">
-        <TradeSide game={game} state={state} pid={a} setPid={id => { setA(id); setGive(emptySide()) }} side={give} set={setGive} choices={players} label="Gives" />
-        <TradeSide game={game} state={state} pid={bId} setPid={id => { setB(id); setGet(emptySide()) }} side={get} set={setGet} choices={players} label="In return for" />
+        <TradeSide game={game} state={state} pid={a} setPid={id => { setA(id); setGive(emptySide()) }} side={give} set={setGive} choices={players} label="First player" />
+        <span className="trade-swap" aria-hidden="true"><ArrowLeftRight size={22} /></span>
+        <TradeSide game={game} state={state} pid={bId} setPid={id => { setB(id); setGet(emptySide()) }} side={get} set={setGet} choices={players} label="Second player" />
       </div>
-      {game.rules.mortgageInterest && <p className="muted small">Receiving a mortgaged deed costs 10% of its mortgage value to the bank straight away.</p>}
+      {game.rules.mortgageInterest && <p className="muted small">Getting a mortgaged property? The new owner pays the bank a 10% fee on its mortgage right away.</p>}
       <Foot result={result} label="Shake on it" />
     </>
   )
@@ -222,12 +228,16 @@ function PactPanel({ game, state }: Props) {
               <label key={m} className="field">
                 <span>{who(game, m).name}</span>
                 <input className="input num" type="number" inputMode="numeric" min={1} max={99} value={shares[m]}
-                  onChange={e => setManual({ ...shares, [m]: num(e.target.value) })} />
+                  onChange={e => {
+                    const v = num(e.target.value)
+                    // typing one share rebalances the others so the total stays at 100%
+                    setManual(v === '' ? { ...shares, [m]: '' } : D.rebalance(Object.fromEntries(members.map(x => [x, Number(shares[x]) || 0])), members, m, v))
+                  }} />
               </label>
             ))}
             <button className="ghost" disabled={!groups.length} onClick={() => setManual(null)}>Suggest a fair split</button>
           </div>
-          <p className="muted small">A fair split follows the printed value of the deeds each ally pools.</p>
+          <p className="muted small">Type one share and the others adjust to keep 100%. A fair split follows the printed value of the deeds each ally pools.</p>
         </>
       )}
 

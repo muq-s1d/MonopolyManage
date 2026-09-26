@@ -299,6 +299,15 @@ test('pact rules: validation and suggested shares', () => {
   assert.match(D.pactProblem(t.g, t.s, { members: ['ann', 'bob'], shares: s, groups: ['orange'], allyRent: 'free' })!, /already pooled/)
 })
 
+test('shares rebalance to 100 as one is typed', () => {
+  check('Two allies: typing 45 gives the other 55', 55, D.rebalance({ a: 60, b: 40 }, ['a', 'b'], 'a', 45).b)
+  const three = D.rebalance({ a: 50, b: 30, c: 20 }, ['a', 'b', 'c'], 'a', 60)
+  check('Three allies: the other 40 splits 30:20, b gets 24', 24, three.b)
+  check('c gets 16', 16, three.c)
+  const floor = D.rebalance({ a: 50, b: 30, c: 20 }, ['a', 'b', 'c'], 'a', 100)
+  assert.deepEqual(floor, { a: 98, b: 1, c: 1 }, 'nobody drops below 1%')
+})
+
 test('bankruptcy breaks the pact before assets change hands', () => {
   const t = orangePact()
   t.run(D.formPact(t.g, t.s, { members: ['ann', 'bob'], shares: { ann: 60, bob: 40 }, groups: ['orange'], allyRent: 'free' }))

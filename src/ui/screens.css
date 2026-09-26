@@ -187,7 +187,12 @@
 .worth dt { font: 600 0.76rem/1.2 var(--f-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
 .worth dd { margin: 0; font-family: var(--f-num); font-size: 1.9rem; font-weight: 700; line-height: 1.1; }
 
-.trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+.trade-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 1rem; align-items: start; }
+.trade-swap { align-self: center; color: var(--brass-hi); }
+:root[data-theme='light'] .trade-swap { color: var(--brass); }
+.trade-head { display: flex; align-items: center; gap: 0.6rem; }
+.trade-head .input { flex: 1; font-weight: 600; }
+.trade-verb { font-family: var(--f-display); font-size: 1.2rem; }
 .trade-side { border: 1px solid var(--line-soft); border-radius: 12px; padding: 0.9rem; margin: 0; display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
 .trade-deeds { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.2rem; max-height: 300px; overflow-y: auto; }
 .trade-deeds label { display: flex; align-items: center; gap: 0.5rem; min-height: 36px; cursor: pointer; }
@@ -295,6 +300,7 @@
 }
 @media (max-width: 640px) {
   .cell-sheet, .trade-grid { grid-template-columns: 1fr; }
+  .trade-swap { justify-self: center; transform: rotate(90deg); }
   .setup-head { grid-template-columns: 1fr; }
   .topbar { grid-template-columns: 1fr auto; }
   .topbar-info, .hide-sm { display: none; }

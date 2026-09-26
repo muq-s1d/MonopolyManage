@@ -458,13 +458,16 @@ export function trade(g: Game, s: State, a: string, b: string, give: Side, get: 
     if (side.jailCards) ops.push({ op: 'jailCard', player: from, delta: -side.jailCards }, { op: 'jailCard', player: to, delta: side.jailCards })
   }
   for (const p of [a, b]) if (cash[p] < 0) return { error: `${name(g, p)} cannot cover the 10% interest on mortgaged property received`, short: -cash[p], who: p }
-  if (!ops.length) return { error: 'Nothing is being traded' }
-  const describe = (side: Side) => [
-    ...side.cells.map(i => g.board.cells[i].name),
-    ...(side.cash ? [money(g.board, side.cash)] : []),
-    ...(side.jailCards ? [`${side.jailCards} jail ${side.jailCards === 1 ? 'card' : 'cards'}`] : []),
-  ].join(', ') || 'nothing'
-  return entry(`${name(g, a)} traded ${describe(give)} to ${name(g, b)} for ${describe(get)}`, ops)
+  if (!ops.length) return { error: 'Tick at least one thing to trade' }
+  const describe = (side: Side) => {
+    const items = [
+      ...side.cells.map(i => g.board.cells[i].name),
+      ...(side.cash ? [money(g.board, side.cash)] : []),
+      ...(side.jailCards ? [`${side.jailCards} get out of jail free ${side.jailCards === 1 ? 'card' : 'cards'}`] : []),
+    ]
+    return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items[0] ?? 'nothing'
+  }
+  return entry(`${name(g, a)} and ${name(g, b)} made a trade. ${name(g, a)} gets ${describe(get)}. ${name(g, b)} gets ${describe(give)}.`, ops)
 }
 
 export function transfer(g: Game, s: State, from: Party, to: Party, amount: number, note: string): Entry | Err {
