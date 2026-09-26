@@ -3,6 +3,15 @@ export type Release = { version: string; date: string; title: string; items: { l
 
 export const RELEASES: Release[] = [
   {
+    version: '1.2.1',
+    date: '2026-09-26',
+    title: 'Deals with players who have no phone',
+    items: [
+      { lead: 'Deals go through', text: 'A player the host added by hand has no phone to say yes with, so a deal with them waited forever. Now the host answers for them: one tap on Approve.' },
+      { lead: 'Clear about it', text: 'The host’s request tray says which players have no phone, so the host knows they are deciding for them.' },
+    ],
+  },
+  {
     version: '1.2.0',
     date: '2026-09-26',
     title: 'Everyone on their own phone',
