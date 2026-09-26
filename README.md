@@ -15,6 +15,7 @@ No paper money to count, no rent tables to squint at, no banker mistakes.
 - **Cards:** pick the Chance or Community Chest card that was drawn and the app applies it: payments, birthday collections, repairs per house and hotel, advance to a square, nearest railroad or utility.
 - **Build and mortgage:** even building, bank supply of houses and hotels, selling back at half price, mortgages with 10% interest.
 - **Trades:** deeds, cash and jail cards between two players, with a summary before you shake on it.
+- **Deals:** alliances that pool chosen colour sets (or railroads and utilities) so allies build together and split rent and costs by agreed shares, loans with interest and a due round, and free rent passes. A house rule you can switch off.
 - **Raise money and bankruptcy:** see what a player could raise, then hand everything to the creditor if it comes to that.
 - **Ledger:** every action in plain words. Undo the last one, or rewind to any point.
 - **Saving:** games save automatically in the browser you play on, with no account needed. Before clearing browser data or switching devices, use **Menu, Download a backup**, then **Restore a backup** in the lobby to carry on.
