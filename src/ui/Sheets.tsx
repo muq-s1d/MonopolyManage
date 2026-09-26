@@ -532,6 +532,7 @@ function MenuSheet({ game }: Props) {
         </button>
         <button className="ghost" onClick={() => ui.go('lobby')}>Back to the lobby</button>
         <button className="ghost" onClick={ui.notes}>Release notes</button>
+        {ui.live?.kind === 'host' && <button className="ghost danger" onClick={() => { ui.live!.close(); ui.setLive(null); ui.say('Session ended. The game carries on here.') }}>End the session</button>}
         {!confirming
           ? <button className="ghost danger" onClick={() => setConfirming(true)}>Delete this game</button>
           : (

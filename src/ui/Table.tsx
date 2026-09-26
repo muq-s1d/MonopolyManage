@@ -1,11 +1,13 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
 import { BookOpen, Menu, Moon, Sun, Undo2 } from 'lucide-react'
 import { money, nextPlayer } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
 import { prefs, type Snap } from '../store.ts'
 import BoardMap from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
-import { Money, readable, Seal, webgl } from './kit.tsx'
+import { Money, PhoneMark, readable, Seal, webgl } from './kit.tsx'
+import Inbox from './Inbox.tsx'
+import type { HostLive } from '../net/live.ts'
 import { dueLoans } from '../engine/deals.ts'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
@@ -43,7 +45,7 @@ function PlayerRail({ game, state }: { game: Game; state: State }) {
               aria-label={`${p.name}, ${money(game.board, state.cash[p.id])} cash, ${deeds} ${deeds === 1 ? 'deed' : 'deeds'}${state.jailed[p.id] ? ', in jail' : ''}${out ? ', bankrupt' : ''}. Open portfolio.`}>
               <Seal player={p} size={52} />
               <span className="rail-text">
-                <span className="rail-name">{p.name}</span>
+                <span className="rail-name">{p.name}{ui.live?.kind === 'host' && <PhoneMark live={ui.live} pid={p.id} />}</span>
                 <Money value={state.cash[p.id]} cur={game.board.currency} className="rail-cash" />
                 <span className="rail-tags">
                   {out ? <span className="tag danger">Bankrupt</span> : <span className="tag">{deeds} {deeds === 1 ? 'deed' : 'deeds'}</span>}
@@ -126,6 +128,13 @@ export function TurnPanel({ game, state }: { game: Game; state: State }) {
   )
 }
 
+function HostInbox({ live, game }: { live: HostLive; game: Game }) {
+  const ui = useUI()
+  useSyncExternalStore(live.subscribe, () => live.host.version)
+  return <Inbox game={game} offers={live.host.offers} me={null} admin answer={() => {}}
+    decide={(id, yes) => { const why = live.host.decide(id, yes); if (why) ui.say(why) }} />
+}
+
 export default function Table({ snap }: { snap: NonNullable<Snap> }) {
   const ui = useUI()
   const { game, state, entries } = snap
@@ -147,7 +156,7 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
     <div className="table">
       <header className="topbar">
         <p className="display topbar-mark">The Counting House</p>
-        <p className="topbar-info muted"><span className="num">{game.board.name}</span>, round <span className="num">{state.round}</span></p>
+        <p className="topbar-info muted">{ui.live && <>Session <span className="num">{ui.live.code}</span>, </>}<span className="num">{game.board.name}</span>, round <span className="num">{state.round}</span></p>
         <nav className="topbar-actions" aria-label="Game">
           <button className="ghost" onClick={() => ui.go('ledger')} aria-label="Ledger"><BookOpen size={18} /> <span className="hide-sm">Ledger</span></button>
           <ThemeToggle />
@@ -161,6 +170,7 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
             <div className="stage-burst sunburst" aria-hidden="true" />
             <PlayerRail game={game} state={state} />
           </section>
+          {ui.live?.kind === 'host' && <HostInbox live={ui.live} game={game} />}
           <TurnPanel key={`${state.turn}:${entries.filter(e => e.ops.some(o => o.op === 'turn')).length}`} game={game} state={state} />
         </div>
         <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell })}

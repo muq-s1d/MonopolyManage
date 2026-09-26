@@ -401,3 +401,13 @@
 .phone-card h2 { font-size: 1.5rem; }
 .phone-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; font-size: 0.95rem; }
 .phone-lines li { display: grid; grid-template-columns: 2ch 1fr; gap: 0.5rem; }
+
+/* ---------- requests: deals waiting on the other side, then the host ---------- */
+.inbox { display: grid; gap: 0.5rem; padding: 0.9rem 1rem; border-color: var(--brass-hi); }
+.inbox-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+.inbox-item { display: grid; gap: 0.35rem; padding-top: 0.6rem; border-top: 1px solid var(--line-soft); }
+.inbox-item:first-child { padding-top: 0; border-top: 0; }
+.inbox-item p { margin: 0; }
+.inbox-item .btn-row { margin-top: 0; justify-content: flex-end; }
+.claim-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; width: 100%; }
+.claim-list .ghost { width: 100%; justify-content: flex-start; gap: 0.6rem; }

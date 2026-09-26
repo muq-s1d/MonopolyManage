@@ -191,6 +191,39 @@ test('undo, once the host approves, rewinds every replica', async () => {
   same(otto.get().state, book.get()!.state)
 })
 
+test('a new phone takes an existing seat once the host agrees', async () => {
+  const { host, phone, otto, O } = await started()
+  const spare = phone()
+  await spare.act('endTurn').then(r => assert.equal(r.error, 'This phone has no seat'))
+  const r = await spare.claim(O)
+  assert.ok(r.pending)
+  await settle()
+  assert.equal(host.offers[0].memo, "A new phone wants to take Otto's seat")
+  host.decide(host.offers[0].id, true)
+  await settle()
+  assert.equal(spare.get().pid, O)
+  assert.equal((await otto.act('endTurn')).error, 'This phone has no seat', 'the old phone lost the seat')
+})
+
+test('the host’s own phone can approve; other phones cannot', async () => {
+  const r = room()
+  const boss = r.phone(), riva = r.phone()
+  assert.equal((await boss.seat({ name: 'Boss', color: COLORS[0], accessory: 0 }, 's3cret')).admin, true)
+  assert.equal((await riva.seat({ name: 'Riva', color: COLORS[1], accessory: 0 }, 'guess')).admin, false)
+  r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
+  await settle()
+  await boss.act('passGo', boss.get().pid!)
+  await riva.undo()
+  await settle()
+  const id = r.host.offers[0].id
+  riva.decide(id, true)
+  await settle()
+  assert.equal(r.book.get()!.entries.length, 1, 'a player cannot approve their own request')
+  boss.decide(id, true)
+  await settle()
+  assert.equal(r.book.get()!.entries.length, 0)
+})
+
 test('a phone that missed a sync asks again and catches up', async () => {
   const { book, riva, otto, R } = await started()
   const lost = otto.receive
