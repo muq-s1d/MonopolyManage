@@ -13,6 +13,7 @@ export const RELEASES: Release[] = [
       { lead: 'The host approves', text: 'Deals go to the other player, then the host. Undo and bankruptcy wait for the host.' },
       { lead: 'Cartoon moments', text: 'Every notable event plays a short animation and a sound on every device. Big ones get a full screen scene you can tap to skip.' },
       { lead: 'Back in one tap', text: 'A reloaded phone keeps its seat, and a reopened host screen resumes the session.' },
+      { lead: 'How to use', text: 'A new button at the bottom of the lobby opens a step by step guide with pictures, for one screen or for everyone’s phones.' },
     ],
   },
   {

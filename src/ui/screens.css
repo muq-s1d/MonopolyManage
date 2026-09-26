@@ -17,7 +17,7 @@
 /* ---------- lobby ---------- */
 .lobby { position: relative; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; overflow: hidden; }
 .lobby-burst { position: absolute; inset: 0; }
-.lobby-card { position: relative; max-width: 620px; text-align: center; display: grid; gap: 1.25rem; justify-items: center; }
+.lobby-card { position: relative; z-index: 1; max-width: 620px; text-align: center; display: grid; gap: 1.25rem; justify-items: center; }
 .lobby-title { font-size: clamp(3rem, 9vw, 6.2rem); color: var(--brass-hi); text-shadow: 0 2px 0 rgb(0 0 0 / 0.25); }
 :root[data-theme='light'] .lobby-title { color: var(--ink); text-shadow: none; }
 @media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .lobby-title { color: var(--ink); text-shadow: none; } }
@@ -26,6 +26,20 @@
 .lobby-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; }
 .lobby-players { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem 1.25rem; }
 .lobby-player { display: inline-flex; align-items: center; gap: 0.5rem; }
+.guide-btn { margin-block: 1.4rem 0.6rem; font-size: 1.05rem; padding-inline: 2.2em; }
+
+/* the brass coil that wraps the How to use button; the back layer sits under the card, the front over it */
+.coil { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.coil.back { z-index: 0; }
+.coil.front { z-index: 2; filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.3)); }
+.coil path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.coil .edge { stroke: var(--brass-lo); stroke-width: 11px; }
+.coil .body { stroke: var(--brass); stroke-width: 7px; }
+.coil .shine { stroke: var(--brass-hi); stroke-width: 2.5px; transform: translateY(-1.8px); }
+.coil.back .edge { stroke-width: 7px; opacity: 0.75; }
+.coil.back .body { stroke: color-mix(in srgb, var(--brass-lo) 70%, var(--brass)); stroke-width: 4.5px; }
+.coil .head { fill: var(--brass-hi); stroke: var(--brass-lo); stroke-width: 1.5px; stroke-linejoin: round; }
+.coil.back .head { fill: var(--brass-lo); }
 
 /* ---------- setup, ledger, end: shared page frame ---------- */
 .setup, .ledger, .endgame { max-width: 1180px; margin: 0 auto; padding: 20px 16px 64px; }
@@ -438,3 +452,37 @@
 .strip.big .strip-text strong { font: 400 clamp(1.8rem, 5vw, 3rem)/1.1 var(--f-display); color: var(--brass-hi); }
 @media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .strip.big .strip-text strong { color: var(--ink); } }
 :root[data-theme='light'] .strip.big .strip-text strong { color: var(--ink); }
+
+/* ---------- how to use: big steps with annotated screenshots ---------- */
+.guide { max-width: 860px; margin: 0 auto; padding: 20px 16px 64px; }
+.guide-ask { text-align: center; font-size: 1.25rem; font-weight: 600; margin: 0.5rem 0 0.75rem; }
+.guide-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; }
+.guide-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem; min-height: 64px; font-size: 1rem; }
+.guide-lead { margin: 1rem auto 0.5rem; max-width: 60ch; text-align: center; color: var(--ink-2); font-size: 1.05rem; }
+.guide-steps { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 1.75rem; }
+.guide-step { display: grid; grid-template-columns: 3rem 1fr; gap: 0.9rem; align-items: start; }
+.guide-num { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; background: #FF4F5E; color: #fff; font: 700 1.5rem/1 var(--f-num); box-shadow: 0 0 0 3px #fff, var(--shadow); }
+.guide-body { display: grid; gap: 0.35rem; min-width: 0; }
+.guide-where { margin: 0; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brass-hi); }
+:root[data-theme='light'] .guide-where { color: var(--brass); }
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .guide-where { color: var(--brass); } }
+.guide-title { margin: 0; font: 600 clamp(1.2rem, 3.4vw, 1.55rem)/1.25 var(--f-ui); }
+.guide-title b { color: #FF4F5E; }
+.shot { position: relative; margin: 0.5rem 0 0; width: 100%; max-width: 720px; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); }
+.shot.phone { max-width: 330px; justify-self: center; border-radius: 28px; border: 6px solid #111; }
+.shot { aspect-ratio: var(--ar); }
+.shot-inner { position: absolute; left: 0; top: 0; width: 100%; }
+.shot img { display: block; width: 100%; height: auto; }
+.shot svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* narrow screens: zoom a wide picture onto its targets (the inner box is scaled and shifted, the frame keeps the crop's shape) */
+@media (max-width: 560px) {
+  .shot.zooms { aspect-ratio: var(--zar); }
+  .shot.zooms .shot-inner { width: var(--zw); left: var(--zx); top: var(--zy); }
+}
+.shot .ring { transform-box: fill-box; transform-origin: center; animation: ring-pulse 1.6s ease-in-out infinite; }
+.shot .arrow { animation: arrow-nudge 1.6s ease-in-out infinite; }
+@keyframes ring-pulse { 50% { transform: scale(1.04); } }
+@keyframes arrow-nudge { 50% { transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .shot .ring, .shot .arrow { animation: none; } }
+.guide-end { justify-content: center; margin-top: 2rem; }
+@media (max-width: 560px) { .guide-step { grid-template-columns: 1fr; } .guide-num { width: 2.5rem; height: 2.5rem; font-size: 1.2rem; } }
