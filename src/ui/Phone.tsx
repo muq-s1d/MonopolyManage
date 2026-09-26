@@ -84,10 +84,12 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
 
 function PhoneMenu({ onClose, onLeave, code }: { onClose: () => void; onLeave: () => void; code: string }) {
   const [sound, setSound] = useState(prefs.get().sound !== false)
+  const [scenes, setScenes] = useState(prefs.get().scenes ?? true)
   const [leaving, setLeaving] = useState(false)
   return (
     <Sheet eyebrow={`Session ${code}`} title="Menu" onClose={onClose}>
       <Switch label="Sound effects" help="Chimes for your own money and for big moments at the table." checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v); if (v) sfx('coin') }} />
+      <Switch label="Cartoon scenes" help="A short animation for every notable moment at the table." checked={scenes} onChange={v => { prefs.set({ scenes: v }); setScenes(v) }} />
       <div className="menu-list">
         {!leaving ? <button className="ghost danger" onClick={() => setLeaving(true)}>Leave the session</button> : (
           <div className="confirm-box" role="alert">

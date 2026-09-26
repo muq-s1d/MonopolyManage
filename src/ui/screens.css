@@ -411,3 +411,19 @@
 .inbox-item .btn-row { margin-top: 0; justify-content: flex-end; }
 .claim-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; width: 100%; }
 .claim-list .ghost { width: 100%; justify-content: flex-start; gap: 0.6rem; }
+
+/* ---------- moments: the animated strip at the top of the screen ---------- */
+.strip { position: fixed; top: 0; left: 0; right: 0; margin-inline: auto; width: min(720px, 100%); z-index: 40; height: 140px; display: grid; grid-template-columns: 1fr; align-items: end;
+  background: var(--surface); border: 1px solid var(--line); border-top: 0; border-bottom: 2px solid var(--brass); border-radius: 0 0 16px 16px; box-shadow: var(--shadow);
+  transform: translateY(-110%); transition: transform var(--t-mid) var(--ease-out); pointer-events: none; cursor: pointer; }
+.strip.on { transform: none; pointer-events: auto; }
+.strip.paid { border-bottom-color: var(--danger); }
+.strip.got { border-bottom-color: var(--ok); }
+.strip-stage { position: absolute; inset: 0 0 34px; display: grid; place-items: center; }
+.strip-stage canvas { position: absolute; inset: 0; }
+.strip-seals { display: flex; gap: 2rem; animation: strip-pop 600ms var(--ease-out); }
+.strip-text { position: relative; margin: 0; padding: 0 16px 8px; display: grid; justify-items: center; text-align: center; gap: 0.05rem; text-shadow: 0 1px 0 var(--surface); }
+.strip-text strong { font-size: 1.05rem; }
+.strip-text span { font-size: 0.8rem; color: var(--ink-2); max-width: 70ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes strip-pop { from { transform: scale(0.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .strip { transition: none; } .strip-seals { animation: none; } }

@@ -17,6 +17,7 @@ import { CURRENT } from './releases.ts'
 
 const BoardEditor = lazy(() => import('./editor/BoardEditor.tsx'))
 const Join = lazy(() => import('./ui/Join.tsx'))
+const Show = lazy(() => import('./ui/Show.tsx'))
 
 const noSub = () => () => {}
 
@@ -71,7 +72,7 @@ export default function App() {
     if (r.pending) show({ text: 'Sent for approval. It happens once everyone involved and the host say yes.' }, 5000)
     else {
       const last = phone?.get().entries.at(-1)
-      if (last) { sfx(soundFor(last)); show({ text: last.memo }, 5000) }
+      if (last) show({ text: last.memo }, 5000) // its sound comes from the Show, like everyone else's
     }
     return true
   }, [phone, show])
@@ -89,7 +90,7 @@ export default function App() {
       if (phone) return void answer(await phone.undo())
       if (!store.get()?.entries.length) return
       store.undo()
-      sfx('undo')
+      if (!live) sfx('undo')
       show({ text: 'Undid the last entry' }, 4000)
     },
     act: async (name, ...args) => {
@@ -104,8 +105,8 @@ export default function App() {
         return false
       }
       store.commit(x)
-      sfx(soundFor(x))
-      show({ text: x.memo, action: { label: 'Undo', run: () => { store.undo(); sfx('undo'); setToast(null) } } }, 5000)
+      if (!live) sfx(soundFor(x)) // in a session every device voices the moment from its own point of view
+      show({ text: x.memo, action: { label: 'Undo', run: () => { store.undo(); if (!live) sfx('undo'); setToast(null) } } }, 5000)
       return true
     },
   }), [show, live, phone, answer, view?.pid])
@@ -132,6 +133,9 @@ export default function App() {
       {current === 'end' && snap && <EndGame snap={snap} />}
       {current === 'editor' && <Suspense fallback={<p className="loading">Opening the drafting room</p>}><BoardEditor /></Suspense>}
       {current === 'join' && <Suspense fallback={<p className="loading">Opening the door</p>}><Join /></Suspense>}
+      {shown && (current === 'table' || phone) && (live || prefs.get().scenes) && (
+        <Suspense fallback={null}><Show game={shown.game} entries={shown.entries} me={phone ? view?.pid ?? null : null} voiced={!!live} /></Suspense>
+      )}
       {sheet && shown && <Sheets spec={sheet} snap={shown} />}
       {notes && !sheet && current !== 'join' && <ReleaseNotes all={notes === 'all'} onClose={closeNotes} />}
       {toast && <ToastView toast={toast} />}

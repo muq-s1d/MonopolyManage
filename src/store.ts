@@ -77,7 +77,7 @@ export const customBoards = {
   remove: (id: string) => write(BOARDS, customBoards.list().filter(x => x.id !== id)),
 }
 
-export type Prefs = { theme?: 'light' | 'dark'; sound?: boolean; seenRelease?: string }
+export type Prefs = { theme?: 'light' | 'dark'; sound?: boolean; seenRelease?: string; scenes?: boolean }
 export const prefs = {
   get: () => read<Prefs>(PREFS, {}),
   set: (p: Prefs) => write(PREFS, { ...prefs.get(), ...p }),
