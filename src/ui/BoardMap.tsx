@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from 'react'
-import { housesLeft, hotelsLeft, money } from '../engine/engine.ts'
+import { housesLeft, hotelsLeft, money, pactFor, pactName } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
 import { Pips } from './kit.tsx'
 
@@ -37,15 +37,17 @@ function BoardMap({ game, state, onPick, highlight, stage }: {
         const owner = state.owner[i]
         const oc = color(owner)
         const ownerName = game.players.find(p => p.id === owner)?.name
+        const pact = owner ? pactFor(game, state, i) : null
         const label = [
           c.name,
           c.price ? `price ${money(b, c.price)}` : '',
           ownerName ? `owned by ${ownerName}` : c.price ? 'unowned' : '',
+          pact ? `shared in the ${pactName(b, pact)}` : '',
           state.mortgaged[i] ? 'mortgaged' : '',
           state.level[i] === 5 ? 'hotel' : state.level[i] ? `${state.level[i]} houses` : '',
         ].filter(Boolean).join(', ')
         return (
-          <button key={i} className={`cell cell-${c.kind} side-${side(i)}${i % 10 === 0 ? ' corner' : ''}${state.mortgaged[i] ? ' mortgaged' : ''}${highlight === i ? ' hl' : ''}`}
+          <button key={i} className={`cell cell-${c.kind} side-${side(i)}${i % 10 === 0 ? ' corner' : ''}${state.mortgaged[i] ? ' mortgaged' : ''}${pact ? ' pooled' : ''}${highlight === i ? ' hl' : ''}`}
             style={{ gridRow: row, gridColumn: col, ['--owner' as string]: oc ?? 'transparent', ['--band' as string]: groupColor(c.group) ?? 'transparent' }}
             onClick={() => onPick(i)} aria-label={label} title={label}>
             {c.kind === 'property' && <i className="band" />}
