@@ -18,6 +18,7 @@ export const RULES: { key: keyof Rules; label: string; help: string }[] = [
   { key: 'bankLimit', label: 'Limited houses and hotels', help: 'The bank only has the board’s supply, normally 32 houses and 12 hotels. Official rule.' },
   { key: 'mortgageInterest', label: 'Mortgage interest', help: 'Lifting a mortgage costs 10% extra, and receiving a mortgaged deed in a trade costs 10% right away. Official rule.' },
   { key: 'noRentInJail', label: 'No rent from jail', help: 'Owners collect nothing while they sit in jail.' },
+  { key: 'deals', label: 'Deals between players', help: 'Alliances that pool colour sets, loans with interest, and free rent passes. Not in the official rules.' },
 ]
 
 const uid = () => crypto.randomUUID().slice(0, 8)
@@ -165,7 +166,7 @@ export default function Setup() {
           </div>
           <h2 className="display rules-h">House rules</h2>
           {RULES.map(r => (
-            <Switch key={r.key} label={r.label} help={r.help} checked={rules[r.key]} onChange={v => setRules({ ...rules, [r.key]: v })} />
+            <Switch key={r.key} label={r.label} help={r.help} checked={rules[r.key] ?? true} onChange={v => setRules({ ...rules, [r.key]: v })} />
           ))}
         </section>
       </div>
