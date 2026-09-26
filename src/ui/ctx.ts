@@ -1,10 +1,11 @@
 import { createContext, useContext } from 'react'
 import type { ActionArgs, ActionName } from '../engine/actions.ts'
 import type { RentOpts } from '../engine/engine.ts'
+import type { Live } from '../net/live.ts'
 
 export type DealTab = 'trade' | 'pact' | 'loan' | 'pass'
 
-export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'editor' | 'end'
+export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'editor' | 'end' | 'join'
 
 export type SheetSpec =
   | { kind: 'landed' }
@@ -28,6 +29,15 @@ export type UI = {
   undo: () => void
   /** Open the release notes for every version. */
   notes: () => void
+  /** The session this device hosts or has joined, if any. Loaded lazily, so admin mode never downloads it. */
+  live: Live | null
+  setLive: (l: Live | null) => void
+}
+
+/** `#join=KQZMT`, from the QR code on the host screen. The host's own phone also carries `&host=<secret>`. */
+export const joinLink = () => {
+  const m = /^#join=([A-Za-z]{5})(?:&host=([\w-]+))?/.exec(location.hash)
+  return m ? { code: m[1].toUpperCase(), host: m[2] } : null
 }
 
 export const UICtx = createContext<UI>(null!)

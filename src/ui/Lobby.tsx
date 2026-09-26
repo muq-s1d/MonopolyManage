@@ -1,14 +1,31 @@
 import { useRef, useState } from 'react'
-import { store, useSnap } from '../store.ts'
+import { sessions, store, useSnap } from '../store.ts'
 import { useUI } from './ctx.ts'
 import { Seal } from './kit.tsx'
 import { LatestNotes } from './WhatsNew.tsx'
+
+const ready = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_KEY
+const NOT_SET_UP = 'Sessions are not set up on this copy of the site. Everything else works as usual.'
 
 export default function Lobby() {
   const ui = useUI()
   const snap = useSnap()
   const file = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const saved = snap ? sessions.host() : null
+  const seat = sessions.phone()
+
+  // the session code is a lazy chunk: admin mode never downloads it
+  const host = async (resume: boolean) => {
+    if (!ready) return setError(NOT_SET_UP)
+    setBusy(true); setError('')
+    try {
+      const { hostSession } = await import('../net/live.ts')
+      ui.setLive(await hostSession(resume))
+      ui.go(resume ? 'table' : 'setup')
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
 
   const importFile = async (f: File | undefined) => {
     if (!f) return
@@ -34,7 +51,11 @@ export default function Lobby() {
               Resume round {snap.state.round}
             </button>
           )}
+          {saved && <button className="plaque big" disabled={busy} onClick={() => host(true)}>Resume session {saved.code}</button>}
           <button className={snap ? 'ghost' : 'plaque big'} onClick={() => ui.go('setup')}>Open a new ledger</button>
+          <button className="ghost" disabled={busy} onClick={() => host(false)}>{busy ? 'Opening the room' : 'Host a session'}</button>
+          {seat && ready && <button className="plaque big" onClick={() => { location.hash = `join=${seat.code}`; ui.go('join') }}>Rejoin session {seat.code}</button>}
+          <button className="ghost" onClick={() => (ready ? ui.go('join') : setError(NOT_SET_UP))}>Join a session</button>
           <button className="ghost" onClick={() => file.current?.click()}>Restore a backup</button>
           <button className="ghost" onClick={() => ui.go('editor')}>Design a board</button>
           <input ref={file} type="file" accept="application/json,.json" hidden onChange={e => importFile(e.target.files?.[0])} />

@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { Smartphone, X } from 'lucide-react'
 import type { Player } from '../engine/types.ts'
+import type { HostLive } from '../net/live.ts'
 import { sfx } from './sound.ts'
 
 export const webgl = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch { return false } })()
@@ -12,6 +13,8 @@ export const PLAYER_COLORS = [
   { name: 'Turquoise', hex: '#3AAFA9' }, { name: 'Rose', hex: '#D9829B' },
 ]
 export const ACCESSORIES = ['Top hat', 'Monocle', 'Cloche', 'Bowler', 'Newsboy cap', 'Flapper band', 'Pearls', 'Bow tie']
+/** "a top hat", but "pearls". */
+export const wearing = (i: number) => (ACCESSORIES[i] === 'Pearls' ? 'pearls' : `a ${ACCESSORIES[i].toLowerCase()}`)
 
 /** WCAG relative luminance of a #rrggbb colour, 0 (black) to 1 (white). */
 function luminance(hex: string) {
@@ -153,4 +156,14 @@ export function Pips({ level }: { level: number }) {
       {level === 5 ? <i className="pip hotel" /> : Array.from({ length: level }, (_, i) => <i key={i} className="pip" />)}
     </span>
   )
+}
+
+/** A small phone mark for players who joined from their own device, lit while it is connected. */
+export function PhoneMark({ live, pid }: { live: HostLive; pid: string }) {
+  const wire = useSyncExternalStore(live.subscribe, live.wire)
+  const device = live.host.devices[pid]
+  if (device === undefined) return null
+  const on = wire.present.includes(device)
+  const label = on ? 'Phone connected' : 'Phone not connected'
+  return <span className={`phone-mark${on ? ' on' : ''}`} title={label}><Smartphone size={14} aria-hidden="true" /><span className="sr-only">{label}</span></span>
 }
