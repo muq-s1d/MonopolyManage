@@ -2,6 +2,8 @@ import { createContext, useContext } from 'react'
 import type { Entry, Err } from '../engine/types.ts'
 import type { RentOpts } from '../engine/engine.ts'
 
+export type DealTab = 'trade' | 'pact' | 'loan' | 'pass'
+
 export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'editor' | 'end'
 
 export type SheetSpec =
@@ -10,7 +12,7 @@ export type SheetSpec =
   | { kind: 'card'; deck: 'chance' | 'chest' }
   | { kind: 'nearest'; type: 'railroad' | 'utility' }
   | { kind: 'portfolio'; player: string }
-  | { kind: 'trade' }
+  | { kind: 'deals'; tab?: DealTab }
   | { kind: 'payment' }
   | { kind: 'bankrupt'; player: string; creditor?: string }
   | { kind: 'menu' }
