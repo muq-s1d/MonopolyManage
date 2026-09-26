@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
 import { BookOpen, Menu, Moon, Sun, Undo2 } from 'lucide-react'
-import { money, nextPlayer } from '../engine/engine.ts'
+import { active, money, nextPlayer } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
-import { prefs, type Snap } from '../store.ts'
+import { prefs, store, type Snap } from '../store.ts'
 import BoardMap from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
 import { Money, PhoneMark, readable, Seal, webgl } from './kit.tsx'
@@ -132,7 +132,12 @@ function HostInbox({ live, game }: { live: HostLive; game: Game }) {
   const ui = useUI()
   useSyncExternalStore(live.subscribe, () => live.host.version)
   return <Inbox game={game} offers={live.host.offers} me={null} admin answer={() => {}}
-    decide={(id, yes) => { const why = live.host.decide(id, yes); if (why) ui.say(why) }} />
+    decide={(id, yes) => {
+      const why = live.host.decide(id, yes)
+      if (why) return ui.say(why)
+      const s = store.get()
+      if (s && active(s.game, s.state).length <= 1) ui.go('end') // an approved last bankruptcy ends the game, as it does on this screen
+    }} />
 }
 
 export default function Table({ snap }: { snap: NonNullable<Snap> }) {

@@ -19,6 +19,7 @@ export type Ev = {
   sound: Sfx
   headline: string
   memo: string
+  entry: Entry
 }
 
 const BIG = new Set<Sfx>(['buy', 'hotel', 'jail', 'pact', 'trade', 'jackpot', 'bankrupt'])
@@ -53,6 +54,6 @@ export function eventFor(g: Game, e: Entry, me: string | null): Ev | null {
   return {
     kind, big: BIG.has(kind),
     from: from as Party | null, to: to as Party | null, actor, amount: Math.max(0, ...Object.values(net)),
-    cell: cellOp && 'cell' in cellOp ? cellOp.cell : null, view, sound, headline, memo: e.memo,
+    cell: cellOp && 'cell' in cellOp ? cellOp.cell : null, view, sound, headline, memo: e.memo, entry: e,
   }
 }
