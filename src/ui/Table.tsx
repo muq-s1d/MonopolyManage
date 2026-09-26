@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BookOpen, Menu, Moon, Sun, Undo2 } from 'lucide-react'
-import { endTurn, goToJail, leaveJail, money, nextPlayer, passGo } from '../engine/engine.ts'
+import { money, nextPlayer } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
-import { prefs, store, type Snap } from '../store.ts'
+import { prefs, type Snap } from '../store.ts'
 import BoardMap from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
 import { Money, readable, Seal, webgl } from './kit.tsx'
-import { dueLoans, repayLoan } from '../engine/deals.ts'
+import { dueLoans } from '../engine/deals.ts'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
 
@@ -81,9 +81,9 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
         <div className="jail-box" role="status">
           <p><strong>In jail</strong>, turn {state.jailTurns[p.id]} of 3. {state.jailTurns[p.id] >= 3 ? 'Without doubles this turn, the fine must be paid.' : 'Roll for doubles, pay the fine, or use a card.'}</p>
           <div className="btn-row">
-            <button className="ghost" onClick={() => ui.act(leaveJail(game, state, p.id, 'roll'))}>Rolled doubles</button>
-            <button className="ghost" onClick={() => ui.act(leaveJail(game, state, p.id, 'fine'))}>Pay {money(game.board, game.board.jailFine)} fine</button>
-            <button className="ghost" disabled={!state.jailCards[p.id]} onClick={() => ui.act(leaveJail(game, state, p.id, 'card'))}>Use jail card</button>
+            <button className="ghost" onClick={() => ui.act('leaveJail', p.id, 'roll')}>Rolled doubles</button>
+            <button className="ghost" onClick={() => ui.act('leaveJail', p.id, 'fine')}>Pay {money(game.board, game.board.jailFine)} fine</button>
+            <button className="ghost" disabled={!state.jailCards[p.id]} onClick={() => ui.act('leaveJail', p.id, 'card')}>Use jail card</button>
           </div>
         </div>
       )}
@@ -94,7 +94,7 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
           <div key={l.id} className="due-box" role="status">
             <p><strong>Loan from {lender.name} is due:</strong> <span className="num">{money(game.board, l.repay)}</span></p>
             <div className="btn-row">
-              <button className="ghost" onClick={() => ui.act(repayLoan(game, state, l.id))}>Repay {money(game.board, l.repay)}</button>
+              <button className="ghost" onClick={() => ui.act('repayLoan', l.id)}>Repay {money(game.board, l.repay)}</button>
               <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>
             </div>
           </div>
@@ -103,7 +103,7 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
 
       <div className="turn-grid">
         <button className="plaque big span-2" onClick={() => ui.open({ kind: 'landed' })}>Landed on</button>
-        <button className="ghost" onClick={() => ui.act(passGo(game, p.id))}>Passed Go <span className="num">+{money(game.board, game.board.salary)}</span></button>
+        <button className="ghost" onClick={() => ui.act('passGo', p.id)}>Passed Go <span className="num">+{money(game.board, game.board.salary)}</span></button>
         <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Build or mortgage</button>
         <button className="ghost" onClick={() => ui.open({ kind: 'deals' })}>Deals</button>
         <button className="ghost" onClick={() => ui.open({ kind: 'payment' })}>Other payment</button>
@@ -115,11 +115,11 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
           Rolled doubles{doubles ? <span className="num"> ({doubles} of 3)</span> : null}
         </button>}
         {doubles >= 3 ? (
-          <button className="plaque danger big" onClick={() => { ui.act(goToJail(game, p.id, 'rolled doubles three times and went to jail')); setDoubles(0) }}>
+          <button className="plaque danger big" onClick={() => { ui.act('goToJail', p.id, 'rolled doubles three times and went to jail'); setDoubles(0) }}>
             Third doubles: to jail
           </button>
         ) : (
-          <button className="plaque big" onClick={() => ui.act(endTurn(game, state))}>Next: {next.name}</button>
+          <button className="plaque big" onClick={() => ui.act('endTurn')}>Next: {next.name}</button>
         )}
       </div>
     </section>
@@ -135,9 +135,7 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
     const key = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (e.metaKey || e.ctrlKey || e.altKey || t.closest('input, textarea, select, dialog')) return
-      const s = store.get()
-      if (!s) return
-      if (e.key === 'n') ui.act(endTurn(s.game, s.state))
+      if (e.key === 'n') ui.act('endTurn')
       else if (e.key === 'u') ui.undo()
       else if (e.key === 'l') ui.open({ kind: 'landed' })
     }

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Entry, Err } from '../engine/types.ts'
+import type { ActionArgs, ActionName } from '../engine/actions.ts'
 import type { RentOpts } from '../engine/engine.ts'
 
 export type DealTab = 'trade' | 'pact' | 'loan' | 'pass'
@@ -21,8 +21,8 @@ export type UI = {
   go: (s: Screen) => void
   open: (s: SheetSpec) => void
   close: () => void
-  /** Commit an engine result, or show why it cannot happen. Returns true when committed. */
-  act: (x: Entry | Err) => boolean
+  /** Run a ledger action by name and commit it, or show why it cannot happen. Resolves true when committed. */
+  act: <K extends ActionName>(name: K, ...args: ActionArgs<K>) => Promise<boolean>
   say: (text: string) => void
   /** Remove the newest ledger entry, with its sound and a note. */
   undo: () => void

@@ -116,7 +116,7 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
   const [auction, setAuction] = useState(false)
   const [bidder, setBidder] = useState(p.id)
   const [bid, setBid] = useState<number | ''>('')
-  const done = (ok: boolean) => ok && ui.close()
+  const done = async (ok: Promise<boolean>) => (await ok) && ui.close()
   const ownable = c.kind === 'property' || c.kind === 'railroad' || c.kind === 'utility'
 
   let action: ReactNode = null
@@ -127,13 +127,13 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
         <p>Unowned. {p.name} may buy it for <strong className="num">{m(c.price!)}</strong>.</p>
         {short > 0 && <p className="danger">{p.name} is {m(short)} short. Raise money by selling buildings or mortgaging.</p>}
         <div className="btn-row">
-          <button className="plaque big" disabled={short > 0} onClick={() => done(ui.act(E.buy(game, state, p.id, cell)))}>Buy for {m(c.price!)}</button>
+          <button className="plaque big" disabled={short > 0} onClick={() => done(ui.act('buy', p.id, cell))}>Buy for {m(c.price!)}</button>
           {short > 0 && <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>}
           {game.rules.auctions && <button className="ghost" aria-expanded={auction} onClick={() => setAuction(!auction)}>Auction it</button>}
           <button className="ghost" onClick={ui.close}>Leave it</button>
         </div>
         {auction && (
-          <form className="auction" onSubmit={e => { e.preventDefault(); if (bid) done(ui.act(E.buy(game, state, bidder, cell, bid))) }}>
+          <form className="auction" onSubmit={e => { e.preventDefault(); if (bid) done(ui.act('buy', bidder, cell, bid)) }}>
             <p className="muted small">Bid out loud around the table, then record the winner. Bids can start at any amount.</p>
             <div className="two-col">
               <label className="field"><span>Winner</span>
@@ -177,8 +177,8 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
             {pass && <p>{p.name} holds a free rent pass here: {pass.landings} {pass.landings === 1 ? 'landing' : 'landings'} left.</p>}
             {short > 0 && !pass && <p className="danger">{p.name} is {m(short)} short.</p>}
             <div className="btn-row">
-              {pass && <button className="plaque big" onClick={() => done(ui.act(D.usePass(game, state, pass.id, cell)))}>Use a free landing</button>}
-              <button className={pass ? 'ghost' : 'plaque big'} disabled={r.amount === 0 || short > 0} onClick={() => done(ui.act(E.payRent(game, state, p.id, cell, { ...opts, dice: dice || undefined })))}>{pass ? 'Pay anyway' : `Pay ${m(r.amount)} rent`}</button>
+              {pass && <button className="plaque big" onClick={() => done(ui.act('usePass', pass.id, cell))}>Use a free landing</button>}
+              <button className={pass ? 'ghost' : 'plaque big'} disabled={r.amount === 0 || short > 0} onClick={() => done(ui.act('payRent', p.id, cell, { ...opts, dice: dice || undefined }))}>{pass ? 'Pay anyway' : `Pay ${m(r.amount)} rent`}</button>
               {short > 0 && <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>}
               {short > 0 && <button className="ghost danger" onClick={() => ui.open({ kind: 'bankrupt', player: p.id, creditor: owner })}>Declare bankruptcy</button>}
             </div>
@@ -193,7 +193,7 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
         <p>{p.name} pays <strong className="num">{m(c.amount ?? 0)}</strong>{game.rules.freeParking ? ' into the Free Parking pot' : ' to the bank'}.</p>
         {short > 0 && <p className="danger">{p.name} is {m(short)} short.</p>}
         <div className="btn-row">
-          <button className="plaque big" disabled={short > 0} onClick={() => done(ui.act(E.payTax(game, state, p.id, cell)))}>Pay {m(c.amount ?? 0)}</button>
+          <button className="plaque big" disabled={short > 0} onClick={() => done(ui.act('payTax', p.id, cell))}>Pay {m(c.amount ?? 0)}</button>
           {short > 0 && <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>}
           {short > 0 && <button className="ghost danger" onClick={() => ui.open({ kind: 'bankrupt', player: p.id, creditor: 'bank' })}>Declare bankruptcy</button>}
         </div>
@@ -206,13 +206,13 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
       </div>
     )
   } else if (c.kind === 'gotojail') {
-    action = <div className="btn-row"><button className="plaque big danger" onClick={() => done(ui.act(E.goToJail(game, p.id)))}>Send {p.name} to jail</button></div>
+    action = <div className="btn-row"><button className="plaque big danger" onClick={() => done(ui.act('goToJail', p.id))}>Send {p.name} to jail</button></div>
   } else if (c.kind === 'parking') {
     action = game.rules.freeParking && state.pot > 0
-      ? <div className="btn-row"><button className="plaque big" onClick={() => done(ui.act(E.collectPot(game, state, p.id)))}>Collect the {m(state.pot)} pot</button></div>
+      ? <div className="btn-row"><button className="plaque big" onClick={() => done(ui.act('collectPot', p.id))}>Collect the {m(state.pot)} pot</button></div>
       : <p className="muted">{game.rules.freeParking ? 'The pot is empty. Nothing happens.' : 'A free rest. Nothing happens.'}</p>
   } else if (c.kind === 'go') {
-    action = <div className="btn-row"><button className="plaque big" onClick={() => done(ui.act(E.passGo(game, p.id, true)))}>Collect {m(b.salary * (game.rules.doubleGo ? 2 : 1))}{game.rules.doubleGo ? ', double for landing on it' : ''}</button></div>
+    action = <div className="btn-row"><button className="plaque big" onClick={() => done(ui.act('passGo', p.id, true))}>Collect {m(b.salary * (game.rules.doubleGo ? 2 : 1))}{game.rules.doubleGo ? ', double for landing on it' : ''}</button></div>
   } else if (c.kind === 'jail') {
     action = <p className="muted">Just visiting. Nothing happens.</p>
   }
@@ -274,15 +274,15 @@ function CardSheet({ game, state, deck }: Props & { deck: 'chance' | 'chest' }) 
   const [advance, setAdvance] = useState<number | null>(null)
   const cards = b[deck]
 
-  const pick = (card: Card) => {
+  const pick = async (card: Card) => {
     const f = card.effect
     if (f.type === 'advance' || f.type === 'nearest' || f.type === 'move') sfx('card')
     if (f.type === 'advance') {
-      if (f.cell === 0) { if (ui.act(E.passGo(game, p.id, true))) ui.close() }
+      if (f.cell === 0) { if (await ui.act('passGo', p.id, true)) ui.close() }
       else setAdvance(f.cell)
     } else if (f.type === 'nearest') ui.open({ kind: 'nearest', type: f.kind })
     else if (f.type === 'move') ui.open({ kind: 'landed' })
-    else if (ui.act(E.drawCard(game, state, p.id, card))) ui.close()
+    else if (await ui.act('drawCard', p.id, card)) ui.close()
   }
 
   if (advance !== null) {
@@ -290,7 +290,7 @@ function CardSheet({ game, state, deck }: Props & { deck: 'chance' | 'chest' }) 
       <Sheet eyebrow={`${p.name} advances`} title={`To ${b.cells[advance].name}`} onClose={ui.close}>
         <p>Did {p.name} pass Go on the way there?</p>
         <div className="btn-row">
-          <button className="plaque big" onClick={() => { if (ui.act(E.passGo(game, p.id))) ui.open({ kind: 'cell', cell: advance }) }}>
+          <button className="plaque big" onClick={async () => { if (await ui.act('passGo', p.id)) ui.open({ kind: 'cell', cell: advance }) }}>
             Yes, collect {E.money(b, b.salary)}
           </button>
           <button className="ghost" onClick={() => ui.open({ kind: 'cell', cell: advance })}>No</button>
@@ -362,18 +362,18 @@ function DeedRow({ game, state, cell }: Props & { cell: number }) {
       <div className="deed-row-tools">
         {c.kind === 'property' && (
           <>
-            <button className="ghost" disabled={!!canB} onClick={() => ui.act(E.build(game, state, cell))} aria-label={`Build on ${c.name} for ${m(c.houseCost!)}`}>
+            <button className="ghost" disabled={!!canB} onClick={() => ui.act('build', cell)} aria-label={`Build on ${c.name} for ${m(c.houseCost!)}`}>
               {lvl === 4 ? 'Hotel' : 'House'} <span className="num">{m(c.houseCost!)}</span>
             </button>
-            <button className="ghost" disabled={!!canS} title={lvl ? (canS ?? '') : ''} onClick={() => ui.act(E.sell(game, state, cell))} aria-label={`Sell a building on ${c.name}`}>
+            <button className="ghost" disabled={!!canS} title={lvl ? (canS ?? '') : ''} onClick={() => ui.act('sell', cell)} aria-label={`Sell a building on ${c.name}`}>
               Sell <span className="num">+{m(Math.floor(c.houseCost! / 2))}</span>
             </button>
           </>
         )}
         {mort ? (
-          <button className="ghost" onClick={() => ui.act(E.unmortgage(game, state, cell))}>Lift <span className="num">{m(E.unmortgageCost(game, cell))}</span></button>
+          <button className="ghost" onClick={() => ui.act('unmortgage', cell)}>Lift <span className="num">{m(E.unmortgageCost(game, cell))}</span></button>
         ) : (
-          <button className="ghost" onClick={() => ui.act(E.mortgage(game, state, cell))}>Mortgage <span className="num">+{m(E.mortgageValue(game, cell))}</span></button>
+          <button className="ghost" onClick={() => ui.act('mortgage', cell)}>Mortgage <span className="num">+{m(E.mortgageValue(game, cell))}</span></button>
         )}
       </div>
     </div>
@@ -452,7 +452,7 @@ function PaymentSheet({ game, state }: Props) {
   const r = amount ? E.transfer(game, state, from, to, amount, note.trim()) : null
   return (
     <Sheet eyebrow="Anything else" title="Other payment" onClose={ui.close}
-      foot={<button className="plaque big" disabled={!r || E.isErr(r)} onClick={() => { if (r && ui.act(r)) ui.close() }}>Record payment</button>}>
+      foot={<button className="plaque big" disabled={!r || E.isErr(r)} onClick={async () => { if (amount && await ui.act('transfer', from, to, amount, note.trim())) ui.close() }}>Record payment</button>}>
       <p className="muted">For house rules, deals and anything the other buttons do not cover.</p>
       <div className="two-col">
         <label className="field"><span>From</span>
@@ -484,11 +484,11 @@ function BankruptSheet({ game, state, pid, creditor }: Props & { pid: string; cr
   const p = who(game, pid)
   const [to, setTo] = useState<Party>(creditor ?? 'bank')
   const w = E.netWorth(game, state, pid)
-  const confirm = () => {
-    if (!ui.act(E.bankrupt(game, state, pid, to))) return
+  const confirm = async () => {
+    if (!await ui.act('bankrupt', pid, to)) return
     const s = store.get()!
     if (E.active(s.game, s.state).length <= 1) return ui.go('end')
-    if (s.state.turn === pid) ui.act(E.endTurn(s.game, s.state))
+    if (s.state.turn === pid) await ui.act('endTurn')
     ui.close()
   }
   return (
