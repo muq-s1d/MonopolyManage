@@ -62,7 +62,7 @@ function PlayerRail({ game, state }: { game: Game; state: State }) {
   )
 }
 
-function TurnPanel({ game, state }: { game: Game; state: State }) {
+export function TurnPanel({ game, state }: { game: Game; state: State }) {
   const ui = useUI()
   const p = game.players.find(x => x.id === state.turn)!
   const next = game.players.find(x => x.id === nextPlayer(game, state))!

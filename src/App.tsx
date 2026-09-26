@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { isErr } from './engine/engine.ts'
 import { run } from './engine/actions.ts'
-import { prefs, store, useSnap, type Snap } from './store.ts'
+import { prefs, sessions, store, useSnap, type Snap } from './store.ts'
 import type { Live } from './net/live.ts'
 import type { Reply } from './net/client.ts'
 import { joinLink, UICtx, type Screen, type SheetSpec, type UI } from './ui/ctx.ts'
@@ -41,7 +41,7 @@ function ToastView({ toast }: { toast: Toast }) {
 
 export default function App() {
   const snap = useSnap()
-  const [screen, setScreen] = useState<Screen>(() => (joinLink() ? 'join' : store.get() ? 'table' : 'lobby'))
+  const [screen, setScreen] = useState<Screen>(() => (joinLink() ? 'join' : store.get() && !sessions.host() ? 'table' : 'lobby')) // a session game reopens from the lobby's Resume session
   const [live, setLive] = useState<Live | null>(null)
   const phone = live?.kind === 'phone' ? live.client : null
   const view = useSyncExternalStore(phone?.subscribe ?? noSub, () => phone?.get() ?? null)
@@ -84,6 +84,7 @@ export default function App() {
     notes: () => { setSheet(null); setNotes('all') },
     live,
     setLive,
+    me: phone ? view?.pid ?? null : null,
     undo: async () => {
       if (phone) return void answer(await phone.undo())
       if (!store.get()?.entries.length) return
@@ -107,7 +108,7 @@ export default function App() {
       show({ text: x.memo, action: { label: 'Undo', run: () => { store.undo(); sfx('undo'); setToast(null) } } }, 5000)
       return true
     },
-  }), [show, live, phone, answer])
+  }), [show, live, phone, answer, view?.pid])
 
   // A game that vanished (cleared or rewound past the start) sends you back to the lobby.
   const current = phone ? 'join' : snap ? screen : screen === 'editor' || screen === 'setup' || screen === 'join' ? screen : 'lobby'

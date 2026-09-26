@@ -22,7 +22,7 @@ function Foot({ result, act, label, extra }: { result: ReturnType<typeof E.trade
     <div className="deal-foot">
       <p className={`trade-summary ${err ? 'muted' : ''}`}>{err ? result.error : result.memo}</p>
       {extra}
-      <button className="plaque big" disabled={err} onClick={async () => { if (await act()) ui.close() }}>{label}</button>
+      <button className="plaque big" disabled={err} onClick={async () => { if (await act()) ui.close() }}>{ui.me ? 'Send for approval' : label}</button>
     </div>
   )
 }
@@ -102,13 +102,14 @@ function TradeSide({ game, state, pid, side, set, choices, setPid, label }: Prop
 
 function TradePanel({ game, state }: Props) {
   const players = E.active(game, state)
-  const [a, setA] = useState(state.turn)
-  const [bId, setB] = useState(players.find(x => x.id !== state.turn)?.id ?? '')
+  const ui = useUI()
+  const first = ui.me ?? state.turn // on a phone you are always one side
+  const [a, setA] = useState(first)
+  const [bId, setB] = useState(players.find(x => x.id !== first)?.id ?? '')
   const [give, setGive] = useState(emptySide)
   const [get, setGet] = useState(emptySide)
   const side = (s: SideState) => ({ cells: s.cells, cash: s.cash || 0, jailCards: s.jailCards })
   const result = useMemo(() => (a && bId && a !== bId ? E.trade(game, state, a, bId, side(give), side(get)) : { error: 'Pick two different players' }), [game, state, a, bId, give, get])
-  const ui = useUI()
   return (
     <>
       <p className="muted deal-help">Tick what each player hands over. Either side can add money too.</p>
@@ -162,7 +163,7 @@ function PactPanel({ game, state }: Props) {
   const players = E.active(game, state)
   const pacts = Object.values(state.pacts)
   const [editing, setEditing] = useState<string | undefined>()
-  const [members, setMembers] = useState<string[]>([state.turn])
+  const [members, setMembers] = useState<string[]>([ui.me ?? state.turn])
   const [groups, setGroups] = useState<string[]>([])
   const [manual, setManual] = useState<Record<string, number | ''> | null>(null)
   const [allyRent, setAllyRent] = useState<'free' | 'paid'>('free')
@@ -175,7 +176,7 @@ function PactPanel({ game, state }: Props) {
 
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v])
   const edit = (p: Pact) => { setEditing(p.id); setMembers(p.members); setGroups(p.groups); setManual(p.shares); setAllyRent(p.allyRent) }
-  const reset = () => { setEditing(undefined); setMembers([state.turn]); setGroups([]); setManual(null); setAllyRent('free') }
+  const reset = () => { setEditing(undefined); setMembers([ui.me ?? state.turn]); setGroups([]); setManual(null); setAllyRent('free') }
   const takenBy = (gr: string) => pacts.find(p => p.id !== editing && p.groups.includes(gr))
 
   return (
@@ -257,8 +258,8 @@ function LoanPanel({ game, state }: Props) {
   const ui = useUI()
   const players = E.active(game, state)
   const loans = Object.values(state.loans)
-  const [borrower, setBorrower] = useState(state.turn)
-  const [lender, setLender] = useState(players.find(p => p.id !== state.turn)?.id ?? '')
+  const [borrower, setBorrower] = useState(ui.me ?? state.turn)
+  const [lender, setLender] = useState(players.find(p => p.id !== (ui.me ?? state.turn))?.id ?? '')
   const [amount, setAmount] = useState<number | ''>('')
   const [rate, setRate] = useState<number | ''>(10)
   const [rounds, setRounds] = useState<number | ''>(3)
@@ -320,8 +321,8 @@ function PassPanel({ game, state }: Props) {
   const ui = useUI()
   const players = E.active(game, state)
   const passes = Object.values(state.immunities)
-  const [holder, setHolder] = useState(state.turn)
-  const [grantor, setGrantor] = useState(players.find(p => p.id !== state.turn)?.id ?? '')
+  const [holder, setHolder] = useState(ui.me ?? state.turn)
+  const [grantor, setGrantor] = useState(players.find(p => p.id !== (ui.me ?? state.turn))?.id ?? '')
   const [group, setGroup] = useState('all')
   const [landings, setLandings] = useState<number | ''>(2)
   const [price, setPrice] = useState<number | ''>('')

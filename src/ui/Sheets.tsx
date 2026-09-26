@@ -486,6 +486,7 @@ function BankruptSheet({ game, state, pid, creditor }: Props & { pid: string; cr
   const w = E.netWorth(game, state, pid)
   const confirm = async () => {
     if (!await ui.act('bankrupt', pid, to)) return
+    if (ui.me) return ui.close() // a phone's bankruptcy waits for the host, who also passes the turn on
     const s = store.get()!
     if (E.active(s.game, s.state).length <= 1) return ui.go('end')
     if (s.state.turn === pid) await ui.act('endTurn')

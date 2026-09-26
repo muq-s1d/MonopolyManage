@@ -6,7 +6,7 @@ import { useUI } from './ctx.ts'
 import { Seal } from './kit.tsx'
 import { sfx } from './sound.ts'
 
-const involves = (e: Entry, id: string, name: string) =>
+export const involves = (e: Entry, id: string, name: string) =>
   e.memo.includes(name) || e.ops.some(o =>
     ('player' in o && o.player === id) || ('owner' in o && o.owner === id) ||
     (o.op === 'transfer' && (o.from === id || o.to === id)))

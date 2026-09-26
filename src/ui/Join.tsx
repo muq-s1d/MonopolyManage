@@ -5,6 +5,7 @@ import { cleanCode } from '../net/session.ts'
 import { sessions } from '../store.ts'
 import { joinLink, useUI } from './ctx.ts'
 import { ACCESSORIES, PLAYER_COLORS, Seal, wearing } from './kit.tsx'
+import Phone from './Phone.tsx'
 import { sfx } from './sound.ts'
 
 const randomSeed = () => Math.floor(Math.random() * 1e9)
@@ -71,7 +72,9 @@ function Seated({ live }: { live: PhoneLive }) {
   const ui = useUI()
   const view = useSyncExternalStore(live.client.subscribe, live.client.get)
   const wire = useSyncExternalStore(live.subscribe, live.wire)
-  const leave = () => { live.close(); sessions.savePhone(null); forget(); ui.setLive(null); ui.go('lobby') }
+  // leaving keeps the saved seat, so joining again reclaims it; only a closed session forgets it
+  const leave = (seat: 'keep' | 'forget' = 'keep') => { live.close(); if (seat === 'forget') sessions.savePhone(null); forget(); ui.setLive(null); ui.go('lobby') }
+  const rejoin = () => { live.close(); ui.setLive(null); location.hash = `join=${live.code}`; ui.go('join') }
   const me = view.players.find(p => p.id === view.pid)
 
   let body
@@ -80,7 +83,7 @@ function Seated({ live }: { live: PhoneLive }) {
       <p className="eyebrow">Session {live.code}</p>
       <h1 className="display">The host closed the bank</h1>
       <p className="muted">Thanks for playing. The final ledger stays on the host screen.</p>
-      <div className="btn-row"><button className="plaque big" onClick={leave}>Back to the lobby</button></div>
+      <div className="btn-row"><button className="plaque big" onClick={() => leave('forget')}>Back to the lobby</button></div>
     </section>
   )
   else if (!me) body = <PickStep live={live} />
@@ -93,21 +96,19 @@ function Seated({ live }: { live: PhoneLive }) {
       <ul className="join-roster" aria-label="Seated so far">
         {view.players.map(p => <li key={p.id}><Seal player={p} size={32} initial={false} />{p.name}</li>)}
       </ul>
-      <div className="btn-row"><button className="ghost" onClick={leave}>Leave</button></div>
+      <div className="btn-row"><button className="ghost" onClick={() => leave()}>Leave</button></div>
     </section>
   )
-  else body = (
-    <section className="panel join-card">
-      <p className="eyebrow">Session {live.code}</p>
-      <Seal player={me} size={96} />
-      <h1 className="display">The game has started</h1>
-      <div className="btn-row"><button className="ghost" onClick={leave}>Leave</button></div>
-    </section>
+  else return (
+    <>
+      <LinkBanner up={wire.up} since={wire.since} hostHere={isHostHere(wire)} heard={view.heard} onRejoin={rejoin} />
+      <Phone live={live} view={view} onLeave={() => leave()} />
+    </>
   )
 
   return (
     <main className="join">
-      <LinkBanner up={wire.up} since={wire.since} hostHere={isHostHere(wire)} heard={view.heard} onRejoin={leave} />
+      <LinkBanner up={wire.up} since={wire.since} hostHere={isHostHere(wire)} heard={view.heard} onRejoin={rejoin} />
       {body}
     </main>
   )
