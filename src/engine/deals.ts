@@ -56,6 +56,16 @@ export function suggestShares(g: Game, s: State, members: string[], groups: stri
   return Object.fromEntries(members.map(m => [m, steps[m] * 5]))
 }
 
+/** Sets one member's share and spreads the rest over the others in their current proportions, at least 1% each. */
+export function rebalance(shares: Record<string, number>, members: string[], who: string, value: number): Record<string, number> {
+  const others = members.filter(m => m !== who)
+  if (!others.length) return { [who]: 100 }
+  const mine = Math.min(100 - others.length, Math.max(1, Math.round(value) || 1))
+  const weights = Object.fromEntries(others.map(m => [m, Math.max(1, shares[m] || 0)]))
+  const spread = splitByShares(100 - mine - others.length, weights)
+  return Object.fromEntries(members.map(m => [m, m === who ? mine : spread[m] + 1]))
+}
+
 const shareText = (g: Game, p: PactDraft) => p.members.map(m => `${name(g, m)} ${p.shares[m]}%`).join(', ')
 
 export function formPact(g: Game, s: State, d: PactDraft, id?: string): Entry | Err {
@@ -64,7 +74,9 @@ export function formPact(g: Game, s: State, d: PactDraft, id?: string): Entry | 
   const members = [...new Set(d.members)]
   const pact: Pact = { id: id ?? uid(), members, shares: Object.fromEntries(members.map(m => [m, d.shares[m]])), groups: [...d.groups], allyRent: d.allyRent }
   const verb = id ? 'amended' : 'signed'
-  return entry(`${members.map(m => name(g, m)).join(' and ')} ${verb} the ${pactName(g.board, pact)}: ${shareText(g, pact)}. Allies ${pact.allyRent === 'free' ? 'stay free' : 'pay rent'} on its deeds.`, [
+  const names = members.map(m => name(g, m))
+  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]
+  return entry(`${who} ${verb} the ${pactName(g.board, pact)}: ${shareText(g, pact)}. Allies ${pact.allyRent === 'free' ? 'stay free' : 'pay rent'} on its deeds.`, [
     { op: 'pact', id: pact.id, pact },
   ])
 }
