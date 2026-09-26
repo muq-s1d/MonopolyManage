@@ -9,7 +9,7 @@ export type NewPlayer = Pick<Player, 'name' | 'color' | 'accessory'> & { seed?: 
 export type Msg =
   | { t: 'hi'; me: string }
   | { t: 'hello'; game: Game | null; entries: Entry[]; players: Player[]; seated: string[]; offers: Offer[] }
-  | { t: 'seat'; me: string; id: string; token?: string; player?: NewPlayer; host?: string }
+  | { t: 'seat'; me: string; id: string; token?: string; player?: NewPlayer; host?: string; claim?: string }
   | { t: 'do'; me: string; id: string; token: string; name: string; args: unknown[] }
   | { t: 'done'; to: string; id: string; ok?: true; pending?: true; error?: string; pid?: string; token?: string; admin?: boolean }
   | { t: 'answer'; me: string; token: string; offer: string; yes: boolean }

@@ -69,6 +69,17 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
   function seat(m: Extract<Msg, { t: 'seat' }>) {
     const reply = (x: Omit<Extract<Msg, { t: 'done' }>, 't' | 'to' | 'id'>) => send({ t: 'done', to: m.me, id: m.id, ...x })
     let token = m.token && seats[m.token] ? m.token : null
+    // after the start a new phone (a dead battery, a swapped device) can take an existing seat once the host agrees
+    if (!token && m.claim && started) {
+      const s = snap()!
+      if (!s.game.players.some(p => p.id === m.claim)) return reply({ error: 'That seat is not at this table' })
+      if (m.host !== o.secret) {
+        offers = [...offers.filter(f => !(f.name === 'seat' && f.args[0] === m.me)), { id: uid(), from: m.claim, name: 'seat', args: [m.me, m.id], memo: `A new phone wants to take ${name(s.game, m.claim)}'s seat`, needs: [], accepted: [] }]
+        sendOffers()
+        return reply({ pending: true })
+      }
+      token = issue(m.claim)
+    }
     if (!token && m.player) {
       if (started) return reply({ error: 'This game has already started. Ask the host to seat you.' })
       const why = joinProblem(m.player)
@@ -84,6 +95,14 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     reply({ ok: true, pid: seats[token], token, admin: admins.has(token) })
     hello()
     changed()
+  }
+
+  /** A fresh token for a seat. Any older phone on that seat loses it. */
+  function issue(pid: string) {
+    for (const [t, p] of Object.entries(seats)) if (p === pid) { delete seats[t]; admins.delete(t) }
+    const t = crypto.randomUUID()
+    seats[t] = pid
+    return t
   }
 
   function joinProblem(p: NewPlayer): string | null {
@@ -140,6 +159,16 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     offers = offers.filter(f => f !== x)
     sendOffers()
     const who = [x.from, ...x.needs]
+    if (x.name === 'seat') {
+      const [device, request] = x.args as string[]
+      if (!yes) { send({ t: 'done', to: device, id: request, error: 'The host said no' }); return null }
+      const token = issue(x.from)
+      devices[x.from] = device
+      send({ t: 'done', to: device, id: request, ok: true, pid: x.from, token, admin: false })
+      hello()
+      changed()
+      return null
+    }
     if (!yes) { say(who, `The host said no: ${x.memo}`, true); return null }
     if (x.name === 'undo') {
       if (s.entries.length !== x.args[0]) { say(who, 'The ledger moved on, so the undo was cancelled', true); return 'The ledger moved on' }

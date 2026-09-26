@@ -7,6 +7,7 @@ import { prefs } from '../store.ts'
 import { useUI } from './ctx.ts'
 import { Money, Seal, Sheet, Switch, webgl } from './kit.tsx'
 import { involves } from './Ledger.tsx'
+import Inbox from './Inbox.tsx'
 import { sfx } from './sound.ts'
 import { ThemeToggle, TurnPanel } from './Table.tsx'
 
@@ -43,6 +44,8 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
         <Money value={w.cash} cur={game.board.currency} className="phone-cash" />
         <p className="muted small">Net worth <strong className="num">{m(w.total)}</strong>: cash, {deeds} {deeds === 1 ? 'deed' : 'deeds'} at printed price, buildings at cost{w.loans ? `, and ${w.loans > 0 ? `${m(w.loans)} you are owed` : `${m(-w.loans)} you owe`}` : ''}.</p>
       </section>
+
+      <Inbox game={game} offers={view.offers} me={me.id} admin={view.admin} answer={live.client.answer} decide={live.client.decide} />
 
       {over ? (
         <section className="panel phone-card"><h2 className="display">{name(game, active(game, state)[0]?.id ?? me.id)} owns the town</h2><p className="muted">The final standings are on the host screen.</p></section>

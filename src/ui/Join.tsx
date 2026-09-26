@@ -150,13 +150,7 @@ function PickStep({ live }: { live: PhoneLive }) {
     if (r.error) { sfx('error'); setError(r.error) } else sfx('tick')
   }
 
-  if (view.game) return (
-    <section className="panel join-card">
-      <p className="eyebrow">Session {live.code}</p>
-      <h1 className="display">The game has started</h1>
-      <p className="muted">New players cannot join once the bank is open. If you had a seat on another phone, ask the host.</p>
-    </section>
-  )
+  if (view.game) return <ClaimStep live={live} />
 
   return (
     <form className="panel join-card" onSubmit={e => { e.preventDefault(); submit() }}>
@@ -188,6 +182,36 @@ function PickStep({ live }: { live: PhoneLive }) {
       <p id="pick-err" className="error-text" role="alert">{error}</p>
       <button className="plaque big" type="submit" disabled={busy || !pick}>{busy ? 'Taking the seat' : 'Take my seat'}</button>
     </form>
+  )
+}
+
+/** After the start: pick your existing seat, and the host approves the new phone. */
+function ClaimStep({ live }: { live: PhoneLive }) {
+  const view = useSyncExternalStore(live.client.subscribe, live.client.get)
+  const [asked, setAsked] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const claim = async (pid: string) => {
+    setError('')
+    const r = await live.client.claim(pid, joinLink()?.host)
+    if (r.error) { sfx('error'); setError(r.error) } else setAsked(pid)
+  }
+  const players = view.game!.players.filter(p => !view.state?.bankrupt[p.id])
+  return (
+    <section className="panel join-card">
+      <p className="eyebrow">Session {live.code}</p>
+      <h1 className="display">The game has started</h1>
+      {asked ? <p>Asked the host to seat this phone as {players.find(p => p.id === asked)?.name}. Waiting for a yes…</p> : (
+        <>
+          <p className="muted">New players cannot join once the bank is open. Already playing on another phone, or on the host screen? Pick your seat and the host approves this phone.</p>
+          <ul className="claim-list">
+            {players.map(p => (
+              <li key={p.id}><button className="ghost" onClick={() => claim(p.id)}><Seal player={p} size={28} initial={false} /> I am {p.name}</button></li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="error-text" role="alert">{error}</p>
+    </section>
   )
 }
 

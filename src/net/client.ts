@@ -67,6 +67,8 @@ export function createClient(send: (m: Msg) => void, o: Opts = {}) {
     },
     /** Take a new seat before the start, or reclaim the saved one. `host` is the host phone's secret. */
     seat: (player?: NewPlayer, host?: string) => ask({ t: 'seat', me, id: crypto.randomUUID(), token: view.token ?? undefined, player, host }),
+    /** After the start: ask the host for an existing seat. Resolves pending; the seat arrives when the host approves. */
+    claim: (pid: string, host?: string) => ask({ t: 'seat', me, id: crypto.randomUUID(), claim: pid, host }),
     act<K extends ActionName>(name: K, ...args: ActionArgs<K>) {
       const a: unknown[] = [...args]
       while (a.length && a.at(-1) === undefined) a.pop() // JSON turns a trailing undefined into null, which skips defaults
