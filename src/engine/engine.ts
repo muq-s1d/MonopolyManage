@@ -1,8 +1,8 @@
-import type { Board, Card, Entry, Err, Game, Op, Party, Rules, State } from './types.ts'
+import type { Board, Card, Entry, Err, Game, Op, Pact, Party, Rules, State } from './types.ts'
 
 export const defaultRules: Rules = {
   freeParking: true, doubleGo: false, auctions: true, evenBuild: true,
-  bankLimit: true, mortgageInterest: true, setDoubleRent: true, noRentInJail: false,
+  bankLimit: true, mortgageInterest: true, setDoubleRent: true, noRentInJail: false, deals: true,
 }
 
 export const isErr = (x: unknown): x is Err => typeof x === 'object' && x !== null && 'error' in x
@@ -19,7 +19,13 @@ export function initialState(g: Game): State {
     owner: Array(n).fill(null), level: Array(n).fill(0), mortgaged: Array(n).fill(false),
     jailed: per(false), jailTurns: per(0), jailCards: per(0), bankrupt: per(false),
     turn: g.players[0]?.id ?? '', round: 1,
+    pacts: {}, loans: {}, immunities: {},
   }
+}
+
+function put<T>(rec: Record<string, T>, id: string, value: T | null) {
+  if (value) rec[id] = value
+  else delete rec[id]
 }
 
 function move(s: State, p: Party, delta: number) {
@@ -37,6 +43,9 @@ export function apply(s: State, o: Op, g: Game) {
     case 'jail': s.jailed[o.player] = o.in; s.jailTurns[o.player] = 0; break
     case 'jailCard': s.jailCards[o.player] += o.delta; break
     case 'bankrupt': s.bankrupt[o.player] = true; break
+    case 'pact': put(s.pacts, o.id, o.pact); break
+    case 'loan': put(s.loans, o.id, o.loan); break
+    case 'immunity': put(s.immunities, o.id, o.immunity); break
     case 'turn': {
       const ids = g.players.map(p => p.id)
       if (ids.indexOf(o.player) <= ids.indexOf(s.turn)) s.round++
@@ -54,7 +63,7 @@ export function replay(g: Game, entries: Entry[]): State {
 
 // ---------- queries ----------
 
-const name = (g: Game, id: Party) =>
+export const name = (g: Game, id: Party) =>
   id === 'bank' ? 'the bank' : id === 'pot' ? 'the Free Parking pot' : g.players.find(p => p.id === id)!.name
 
 export const groupCells = (b: Board, group: string) =>
@@ -62,6 +71,80 @@ export const groupCells = (b: Board, group: string) =>
 
 export const ownsGroup = (g: Game, s: State, owner: string, group: string) =>
   groupCells(g.board, group).every(i => s.owner[i] === owner)
+
+// ---------- pacts: shared holdings ----------
+
+/** The pooling group of a cell: its colour set, or 'railroad' / 'utility'. */
+export const groupOf = (b: Board, cell: number): string | null => {
+  const c = b.cells[cell]
+  return c.kind === 'property' ? c.group! : c.kind === 'railroad' || c.kind === 'utility' ? c.kind : null
+}
+
+export const cellsOfGroup = (b: Board, group: string) =>
+  group === 'railroad' || group === 'utility' ? b.cells.flatMap((c, i) => (c.kind === group ? [i] : [])) : groupCells(b, group)
+
+export const groupLabel = (b: Board, group: string) =>
+  group === 'railroad' ? 'Railroads' : group === 'utility' ? 'Utilities' : b.groups.find(x => x.id === group)?.name ?? group
+
+export function pactName(b: Board, p: Pact) {
+  const names = p.groups.map(gr => groupLabel(b, gr))
+  return `${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]} pact`
+}
+
+/** The pact pooling this deed: it covers the deed's group and the deed's owner is a member. */
+export function pactFor(g: Game, s: State, cell: number): Pact | null {
+  const owner = s.owner[cell], group = groupOf(g.board, cell)
+  if (!owner || !group) return null
+  return Object.values(s.pacts).find(p => p.groups.includes(group) && p.members.includes(owner)) ?? null
+}
+
+/** Who shares a deed's rent and building costs, as whole percentages. */
+export function holders(g: Game, s: State, cell: number): Record<string, number> {
+  const pact = pactFor(g, s, cell), owner = s.owner[cell]
+  return pact ? pact.shares : owner ? { [owner]: 100 } : {}
+}
+
+/** A colour set counts as complete when one player owns all of it, or one pact's members do. */
+export function setComplete(g: Game, s: State, cell: number): { pact: Pact | null } | null {
+  const c = g.board.cells[cell]
+  if (c.kind !== 'property' || !s.owner[cell]) return null
+  const cells = groupCells(g.board, c.group!)
+  if (cells.every(i => s.owner[i] === s.owner[cell])) return { pact: null }
+  const pact = pactFor(g, s, cell)
+  return pact && cells.every(i => s.owner[i] && pact.members.includes(s.owner[i]!)) ? { pact } : null
+}
+
+/** Whole-dollar split by largest remainder; parts always sum to amount, ties go in member order. */
+export function splitByShares(amount: number, shares: Record<string, number>): Record<string, number> {
+  const ids = Object.keys(shares), total = ids.reduce((t, id) => t + shares[id], 0)
+  const out: Record<string, number> = {}
+  const rest = ids.map(id => {
+    out[id] = Math.floor((amount * shares[id]) / total)
+    return { id, r: (amount * shares[id]) % total }
+  })
+  let left = amount - ids.reduce((t, id) => t + out[id], 0)
+  for (const { id } of rest.toSorted((a, b) => b.r - a.r)) { if (left-- <= 0) break; out[id]++ }
+  return out
+}
+
+const describeSplit = (g: Game, parts: Record<string, number>) =>
+  Object.entries(parts).filter(([, v]) => v > 0).map(([id, v]) => `${name(g, id)} ${money(g.board, v)}`).join(', ')
+
+/** Sells every building on a pact's pooled deeds at half cost, splits the refund by shares, ends the pact. */
+export function dissolveOps(g: Game, s: State, pact: Pact) {
+  const ops: Op[] = [], cleared: number[] = []
+  let refund = 0
+  for (const group of pact.groups) for (const i of cellsOfGroup(g.board, group)) {
+    if (!s.level[i] || !s.owner[i] || !pact.members.includes(s.owner[i]!)) continue
+    refund += s.level[i] * Math.floor(g.board.cells[i].houseCost! / 2)
+    ops.push({ op: 'build', cell: i, level: 0 })
+    cleared.push(i)
+  }
+  const credit = refund ? splitByShares(refund, pact.shares) : {}
+  for (const [id, v] of Object.entries(credit)) if (v) ops.push({ op: 'transfer', from: 'bank', to: id, amount: v })
+  ops.push({ op: 'pact', id: pact.id, pact: null })
+  return { ops, credit, cleared, refund }
+}
 
 export const housesLeft = (g: Game, s: State) =>
   g.board.houses - s.level.reduce((n, l) => n + (l < 5 ? l : 0), 0)
@@ -83,48 +166,62 @@ export function rent(g: Game, s: State, cell: number, opts: RentOpts = {}): { am
   if (!owner) return { amount: 0, why: 'Nobody owns it' }
   if (s.mortgaged[cell]) return { amount: 0, why: 'No rent, it is mortgaged' }
   if (g.rules.noRentInJail && s.jailed[owner]) return { amount: 0, why: `No rent, ${name(g, owner)} is in jail` }
-  const owned = (kind: string) => b.cells.filter((x, i) => x.kind === kind && s.owner[i] === owner).length
+  const pact = pactFor(g, s, cell)
+  const holdersOf = pact ? pact.members : [owner]
+  const who = pact ? `the ${pactName(b, pact)}` : 'owner'
+  const owned = (kind: string) => b.cells.filter((x, i) => x.kind === kind && holdersOf.includes(s.owner[i]!)).length
   if (c.kind === 'property') {
     const lvl = s.level[cell], rents = c.rents!
     if (lvl === 5) return { amount: rents[5], why: `Hotel on ${c.name}` }
     if (lvl > 0) return { amount: rents[lvl], why: `${lvl} ${lvl === 1 ? 'house' : 'houses'} on ${c.name}` }
-    if (g.rules.setDoubleRent && ownsGroup(g, s, owner, c.group!))
-      return { amount: rents[0] * 2, why: `Full colour set, so base rent ${money(b, rents[0])} is doubled` }
+    const full = g.rules.setDoubleRent && setComplete(g, s, cell)
+    if (full) return { amount: rents[0] * 2, why: `${full.pact ? `The ${pactName(b, full.pact)} holds the full set` : 'Full colour set'}, so base rent ${money(b, rents[0])} is doubled` }
     return { amount: rents[0], why: `Base rent on ${c.name}` }
   }
   if (c.kind === 'railroad') {
     const n = owned('railroad'), m = opts.railroadMultiplier ?? 1
     const base = b.railroadRents[n - 1]
-    return { amount: base * m, why: `Owner has ${n} ${n === 1 ? 'railroad' : 'railroads'}${m > 1 ? `, card doubles ${money(b, base)}` : ''}` }
+    return { amount: base * m, why: `${pact ? `The ${pactName(b, pact)} holds` : 'Owner has'} ${n} ${n === 1 ? 'railroad' : 'railroads'}${m > 1 ? `, card doubles ${money(b, base)}` : ''}` }
   }
   if (c.kind === 'utility') {
     const n = owned('utility')
     const mult = opts.utilityMax ? b.utilityMultipliers.at(-1)! : b.utilityMultipliers[n - 1]
     const dice = opts.dice ?? 0
-    return { amount: dice * mult, why: `Dice ${dice} times ${mult}${opts.utilityMax ? ' (card)' : `, owner has ${n} ${n === 1 ? 'utility' : 'utilities'}`}` }
+    return { amount: dice * mult, why: `Dice ${dice} times ${mult}${opts.utilityMax ? ' (card)' : `, ${who} ${pact ? 'holds' : 'has'} ${n} ${n === 1 ? 'utility' : 'utilities'}`}` }
   }
   return { amount: 0, why: 'Not a property' }
 }
 
-/** Official time limit valuation: cash, printed price (half if mortgaged), buildings at cost. */
+/** Official time limit valuation: cash, printed price (half if mortgaged), buildings at cost.
+ *  Buildings on pooled deeds count by pact share; loans add what you are owed and subtract what you owe. */
 export function netWorth(g: Game, s: State, pid: string) {
   let property = 0, buildings = 0, raisable = s.cash[pid]
   g.board.cells.forEach((c, i) => {
-    if (s.owner[i] !== pid) return
-    const price = c.price ?? 0
-    property += s.mortgaged[i] ? Math.floor(price / 2) : price
-    buildings += s.level[i] * (c.houseCost ?? 0)
-    raisable += (s.mortgaged[i] ? 0 : Math.floor(price / 2)) + Math.floor((s.level[i] * (c.houseCost ?? 0)) / 2)
+    if (s.owner[i] === pid) {
+      const price = c.price ?? 0
+      property += s.mortgaged[i] ? Math.floor(price / 2) : price
+      raisable += s.mortgaged[i] ? 0 : Math.floor(price / 2)
+    }
+    if (!s.level[i]) return
+    const share = holders(g, s, i)[pid] ?? 0
+    if (!share) return
+    buildings += splitByShares(s.level[i] * (c.houseCost ?? 0), holders(g, s, i))[pid]
+    raisable += splitByShares(s.level[i] * Math.floor((c.houseCost ?? 0) / 2), holders(g, s, i))[pid]
   })
-  return { cash: s.cash[pid], property, buildings, total: s.cash[pid] + property + buildings, raisable }
+  let loans = 0
+  for (const l of Object.values(s.loans)) {
+    if (l.lender === pid) loans += l.repay
+    if (l.borrower === pid) loans -= l.repay
+  }
+  return { cash: s.cash[pid], property, buildings, loans, total: s.cash[pid] + property + buildings + loans, raisable }
 }
 
 // ---------- actions: each returns one ledger entry, or a reason it cannot happen ----------
 
-const entry = (memo: string, ops: Op[]): Entry => ({ at: Date.now(), memo, ops })
+export const entry = (memo: string, ops: Op[]): Entry => ({ at: Date.now(), memo, ops })
 const sink = (g: Game): Party => (g.rules.freeParking ? 'pot' : 'bank')
 
-function need(g: Game, s: State, pid: string, amount: number): Err | null {
+export function need(g: Game, s: State, pid: string, amount: number): Err | null {
   const short = amount - s.cash[pid]
   return short > 0 ? { error: `${name(g, pid)} is ${money(g.board, short)} short`, short, who: pid } : null
 }
@@ -141,16 +238,29 @@ export function buy(g: Game, s: State, pid: string, cell: number, price = g.boar
   ])
 }
 
-export function payRent(g: Game, s: State, pid: string, cell: number, opts: RentOpts = {}): Entry | Err {
+/** Who receives rent from this payer, and in what parts, or the reason no rent is due. */
+export function rentSplit(g: Game, s: State, pid: string, cell: number, amount: number): Record<string, number> | string {
   const owner = s.owner[cell]
-  if (!owner || owner === pid) return { error: 'No rent is owed here' }
+  if (!owner || owner === pid) return 'No rent is owed here'
+  const pact = pactFor(g, s, cell)
+  if (!pact) return { [owner]: amount }
+  if (!pact.members.includes(pid)) return splitByShares(amount, pact.shares)
+  if (pact.allyRent === 'free') return `Allies stay free on the ${pactName(g.board, pact)}`
+  const others = Object.fromEntries(Object.entries(pact.shares).filter(([id]) => id !== pid))
+  return splitByShares(amount, others)
+}
+
+export function payRent(g: Game, s: State, pid: string, cell: number, opts: RentOpts = {}): Entry | Err {
   const r = rent(g, s, cell, opts)
+  const split = rentSplit(g, s, pid, cell, r.amount)
+  if (typeof split === 'string') return { error: split }
   if (r.amount === 0) return { error: r.why }
   const e = need(g, s, pid, r.amount)
   if (e) return e
-  return entry(`${name(g, pid)} paid ${name(g, owner)} ${money(g.board, r.amount)} rent on ${g.board.cells[cell].name}. ${r.why}.`, [
-    { op: 'transfer', from: pid, to: owner, amount: r.amount },
-  ])
+  const payees = Object.entries(split).filter(([, v]) => v > 0)
+  const to = payees.length === 1 ? name(g, payees[0][0]) : `the ${pactName(g.board, pactFor(g, s, cell)!)}`
+  return entry(`${name(g, pid)} paid ${to} ${money(g.board, r.amount)} rent on ${g.board.cells[cell].name}${payees.length > 1 ? ` (${describeSplit(g, split)})` : ''}. ${r.why}.`,
+    payees.map(([id, v]) => ({ op: 'transfer', from: pid, to: id, amount: v })))
 }
 
 export function payTax(g: Game, s: State, pid: string, cell: number): Entry | Err {
@@ -244,14 +354,16 @@ export function drawCard(g: Game, s: State, pid: string, card: Card): Entry | Er
 export function canBuild(g: Game, s: State, cell: number): string | null {
   const c = g.board.cells[cell], owner = s.owner[cell], lvl = s.level[cell]
   if (c.kind !== 'property' || !owner) return 'Only owned colour properties take buildings'
-  if (!ownsGroup(g, s, owner, c.group!)) return 'Own the whole colour set first'
+  if (!setComplete(g, s, cell)) return g.rules.deals !== false ? 'Own the whole colour set, or pool it in a pact' : 'Own the whole colour set first'
   const cells = groupCells(g.board, c.group!)
   if (cells.some(i => s.mortgaged[i])) return 'Lift every mortgage in the set first'
   if (lvl === 5) return 'Already has a hotel'
   if (g.rules.evenBuild && lvl > Math.min(...cells.map(i => s.level[i]))) return 'Build evenly: other properties in the set need a house first'
   if (g.rules.bankLimit && lvl < 4 && housesLeft(g, s) < 1) return 'The bank has no houses left'
   if (g.rules.bankLimit && lvl === 4 && hotelsLeft(g, s) < 1) return 'The bank has no hotels left'
-  if (s.cash[owner] < c.houseCost!) return `Needs ${money(g.board, c.houseCost!)} cash`
+  const parts = splitByShares(c.houseCost!, holders(g, s, cell))
+  for (const [id, v] of Object.entries(parts)) if (s.cash[id] < v) return id === owner && Object.keys(parts).length === 1
+    ? `Needs ${money(g.board, v)} cash` : `${name(g, id)} needs ${money(g.board, v)} for their share`
   return null
 }
 
@@ -268,9 +380,11 @@ export function canSell(g: Game, s: State, cell: number): string | null {
 export function build(g: Game, s: State, cell: number): Entry | Err {
   const why = canBuild(g, s, cell)
   if (why) return { error: why }
-  const c = g.board.cells[cell], owner = s.owner[cell]!, lvl = s.level[cell] + 1
-  return entry(`${name(g, owner)} built ${lvl === 5 ? 'a hotel' : `house ${lvl}`} on ${c.name} for ${money(g.board, c.houseCost!)}`, [
-    { op: 'transfer', from: owner, to: 'bank', amount: c.houseCost! },
+  const c = g.board.cells[cell], owner = s.owner[cell]!, lvl = s.level[cell] + 1, pact = pactFor(g, s, cell)
+  const parts = splitByShares(c.houseCost!, holders(g, s, cell))
+  const by = pact ? `The ${pactName(g.board, pact)}` : name(g, owner)
+  return entry(`${by} built ${lvl === 5 ? 'a hotel' : `house ${lvl}`} on ${c.name} for ${money(g.board, c.houseCost!)}${pact ? ` (${describeSplit(g, parts)})` : ''}`, [
+    ...Object.entries(parts).filter(([, v]) => v > 0).map(([id, v]): Op => ({ op: 'transfer', from: id, to: 'bank', amount: v })),
     { op: 'build', cell, level: lvl },
   ])
 }
@@ -278,9 +392,11 @@ export function build(g: Game, s: State, cell: number): Entry | Err {
 export function sell(g: Game, s: State, cell: number): Entry | Err {
   const why = canSell(g, s, cell)
   if (why) return { error: why }
-  const c = g.board.cells[cell], owner = s.owner[cell]!, lvl = s.level[cell], back = Math.floor(c.houseCost! / 2)
-  return entry(`${name(g, owner)} sold ${lvl === 5 ? 'the hotel' : 'a house'} on ${c.name} back to the bank for ${money(g.board, back)}`, [
-    { op: 'transfer', from: 'bank', to: owner, amount: back },
+  const c = g.board.cells[cell], owner = s.owner[cell]!, lvl = s.level[cell], back = Math.floor(c.houseCost! / 2), pact = pactFor(g, s, cell)
+  const parts = splitByShares(back, holders(g, s, cell))
+  const by = pact ? `The ${pactName(g.board, pact)}` : name(g, owner)
+  return entry(`${by} sold ${lvl === 5 ? 'the hotel' : 'a house'} on ${c.name} back to the bank for ${money(g.board, back)}${pact ? ` (${describeSplit(g, parts)})` : ''}`, [
+    ...Object.entries(parts).filter(([, v]) => v > 0).map(([id, v]): Op => ({ op: 'transfer', from: 'bank', to: id, amount: v })),
     { op: 'build', cell, level: lvl - 1 },
   ])
 }
@@ -379,14 +495,29 @@ export function endTurn(g: Game, s: State): Entry {
 export function bankrupt(g: Game, s: State, pid: string, creditor: Party): Entry {
   const ops: Op[] = []
   let cash = s.cash[pid]
+  const toPlayer = creditor !== 'bank' && creditor !== 'pot'
+  // Pacts with this player break first: pooled buildings are sold and the refund split by shares.
+  const cleared = new Set<number>()
+  for (const p of Object.values(s.pacts)) {
+    if (!p.members.includes(pid)) continue
+    const d = dissolveOps(g, s, p)
+    ops.push(...d.ops)
+    cash += d.credit[pid] ?? 0
+    d.cleared.forEach(i => cleared.add(i))
+  }
+  // Money owed to the player passes to a player creditor; money the player owes is written off.
+  for (const l of Object.values(s.loans)) {
+    if (l.borrower === pid || (l.lender === pid && !toPlayer)) ops.push({ op: 'loan', id: l.id, loan: null })
+    else if (l.lender === pid) ops.push({ op: 'loan', id: l.id, loan: l.borrower === creditor ? null : { ...l, lender: creditor } })
+  }
+  for (const im of Object.values(s.immunities)) if (im.holder === pid || im.grantor === pid) ops.push({ op: 'immunity', id: im.id, immunity: null })
   s.level.forEach((l, i) => {
-    if (s.owner[i] !== pid || !l) return
+    if (s.owner[i] !== pid || !l || cleared.has(i)) return
     const back = l * Math.floor(g.board.cells[i].houseCost! / 2)
     ops.push({ op: 'transfer', from: 'bank', to: pid, amount: back }, { op: 'build', cell: i, level: 0 })
     cash += back
   })
   if (cash > 0) ops.push({ op: 'transfer', from: pid, to: creditor, amount: cash })
-  const toPlayer = creditor !== 'bank' && creditor !== 'pot'
   s.owner.forEach((o, i) => {
     if (o !== pid) return
     // ponytail: the 10% interest a creditor owes on inherited mortgages is skipped

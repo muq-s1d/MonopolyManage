@@ -54,6 +54,7 @@ export type Rules = {
   mortgageInterest: boolean
   setDoubleRent: boolean
   noRentInJail: boolean
+  deals?: boolean // alliances, loans and free rent; missing on older games means on
 }
 
 export type Player = { id: string; name: string; color: string; accessory: number; seed: number }
@@ -61,6 +62,20 @@ export type Player = { id: string; name: string; color: string; accessory: numbe
 export type Game = { id: string; createdAt: number; board: Board; rules: Rules; players: Player[] }
 
 export type Party = string // a player id, 'bank' or 'pot'
+
+/** Players pooling the deeds they own in some groups. Shares are whole percentages summing to 100. */
+export type Pact = {
+  id: string
+  members: string[]
+  shares: Record<string, number>
+  groups: string[]          // colour group ids, 'railroad', 'utility'
+  allyRent: 'free' | 'paid' // what members pay when landing on the pact's own deeds
+}
+
+export type Loan = { id: string; lender: string; borrower: string; amount: number; repay: number; dueRound: number }
+
+/** Free landings on the grantor's own deeds (all of them, or one group). */
+export type Immunity = { id: string; holder: string; grantor: string; group: string; landings: number }
 
 export type Op =
   | { op: 'transfer'; from: Party; to: Party; amount: number }
@@ -71,6 +86,9 @@ export type Op =
   | { op: 'jailCard'; player: string; delta: number }
   | { op: 'turn'; player: string }
   | { op: 'bankrupt'; player: string }
+  | { op: 'pact'; id: string; pact: Pact | null }
+  | { op: 'loan'; id: string; loan: Loan | null }
+  | { op: 'immunity'; id: string; immunity: Immunity | null }
 
 export type Entry = { at: number; memo: string; ops: Op[] }
 
@@ -87,6 +105,9 @@ export type State = {
   bankrupt: Record<string, boolean>
   turn: string
   round: number
+  pacts: Record<string, Pact>
+  loans: Record<string, Loan>
+  immunities: Record<string, Immunity>
 }
 
 export type Err = { error: string; short?: number; who?: string }
