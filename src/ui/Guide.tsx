@@ -7,7 +7,7 @@ type Shot = { w: number; h: number; phone?: boolean; marks: Record<string, Box> 
 
 /** Screenshots in public/guide, with the boxes of the buttons that matter, measured from the app when they were taken. */
 const SHOTS = {
-  lobby: { w: 660, h: 291, marks: { newLedger: [0.0629, 0.5466, 0.3716, 0.1923], host: [0.4527, 0.5466, 0.2383, 0.1923], join: [0.7092, 0.5466, 0.2278, 0.1923] } },
+  lobby: { w: 1012, h: 207, marks: { newLedger: [0.0326, 0.5696, 0.2797, 0.2708], host: [0.3601, 0.5696, 0.1359, 0.2332], join: [0.5039, 0.5696, 0.1359, 0.2332] } },
   setup: { w: 741, h: 423, marks: { name: [0.0418, 0.4523, 0.9163, 0.1041], open: [0.7189, 0.0237, 0.2676, 0.1325] } },
   turn: { w: 587, h: 631, marks: { landed: [0.0521, 0.558, 0.8958, 0.0888], go: [0.0521, 0.6595, 0.4411, 0.0698], next: [0.4186, 0.8564, 0.5293, 0.0888] } },
   landed: { w: 760, h: 270, marks: { search: [0.0329, 0.5354, 0.9342, 0.163], square: [0.0329, 0.7429, 0.9342, 0.1645] } },
