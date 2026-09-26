@@ -58,6 +58,7 @@ export default function Inbox({ game, offers, me, admin, answer, decide }: Props
           return (
             <li key={o.id} className="inbox-item">
               <p>{o.name === 'seat' ? o.memo : <><strong>{nameOf(game, o.from)}:</strong> {o.memo}</>}</p>
+              {!!o.proxy?.length && <p className="muted small">{list(o.proxy.map(p => nameOf(game, p)))} {o.proxy.length === 1 ? 'has' : 'have'} no phone, so your Approve is their yes.</p>}
               <span className="btn-row tight">
                 {!ready && <span className="muted small">{status(game, o)}</span>}
                 <button className="ghost danger" onClick={() => decide(o.id, false)}>Refuse</button>

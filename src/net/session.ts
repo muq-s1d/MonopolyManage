@@ -2,7 +2,8 @@ import { RealtimeClient, type RealtimeChannel } from '@supabase/realtime-js'
 import type { Entry, Game, Player } from '../engine/types.ts'
 
 /** A request waiting on the other players and then the host. */
-export type Offer = { id: string; from: string; name: string; args: unknown[]; memo: string; needs: string[]; accepted: string[] }
+/** `needs` must each say yes on their phone; `proxy` have no phone, so the host's Approve is their yes. */
+export type Offer = { id: string; from: string; name: string; args: unknown[]; memo: string; needs: string[]; accepted: string[]; proxy?: string[] }
 export type NewPlayer = Pick<Player, 'name' | 'color' | 'accessory'> & { seed?: number }
 
 /** Every message on a session channel. `me` is the sending phone's device id, `to` the device a reply is for. */

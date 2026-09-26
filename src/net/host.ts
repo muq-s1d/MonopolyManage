@@ -134,7 +134,12 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     const undo = m.name === 'undo'
     const preview = undo ? (s.entries.length ? { memo: `Undo: ${s.entries.at(-1)!.memo}` } : { error: 'Nothing to undo' }) : exec(s.game, s.state, m.name as ActionName, args as never)
     if (isErr(preview)) return reply(preview)
-    offers = [...offers, { id: uid(), from: pid, name: m.name, args: undo ? [s.entries.length] : args, memo: preview.memo, needs: g.gate === 'deal' ? g.needs : [], accepted: [] }]
+    // players without a phone are run from the host screen, so they cannot say yes themselves: the host answers for them
+    const involved = g.gate === 'deal' ? g.needs : [], phoned = new Set(Object.values(seats))
+    offers = [...offers, {
+      id: uid(), from: pid, name: m.name, args: undo ? [s.entries.length] : args, memo: preview.memo,
+      needs: involved.filter(p => phoned.has(p)), accepted: [], proxy: involved.filter(p => !phoned.has(p)),
+    }]
     sendOffers()
     reply({ pending: true })
   }

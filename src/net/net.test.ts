@@ -224,6 +224,38 @@ test('the host’s own phone can approve; other phones cannot', async () => {
   assert.equal(r.book.get()!.entries.length, 0)
 })
 
+test('a deal with a player who has no phone waits only for the host', async () => {
+  const r = room()
+  const riva = r.phone(), otto = r.phone()
+  await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
+  await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
+  // the host seats Ada by hand and plays her turns on the big screen
+  r.host.setPlayers([...r.host.players, { id: 'ada', name: 'Ada', color: COLORS[2], accessory: 0, seed: 1 }])
+  r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
+  await settle()
+  const R = riva.get().pid!, O = otto.get().pid!
+  const med = idx('Mediterranean Avenue')
+  await riva.act('buy', R, med)
+  const side = (cells: number[], cash = 0) => ({ cells, cash, jailCards: 0 })
+  assert.ok((await riva.act('trade', R, 'ada', side([med]), side([], 50))).pending)
+  await settle()
+  const x = r.host.offers[0]
+  assert.deepEqual([x.needs, x.proxy], [[], ['ada']], 'nobody can say yes for Ada except the host')
+  assert.equal(r.host.decide(x.id, true), null)
+  assert.equal(r.book.get()!.state.owner[med], 'ada')
+  // a pact with a phone player and a phoneless one waits for the phone, then the host; each holds a light blue
+  await riva.act('buy', R, idx('Oriental Avenue'))
+  await riva.act('endTurn')
+  await otto.act('buy', O, idx('Vermont Avenue'))
+  await otto.act('endTurn')
+  const s = r.book.get()!
+  r.book.commit(E.buy(s.game, s.state, 'ada', idx('Connecticut Avenue')) as Entry) // Ada's go, played on the host screen
+  assert.ok((await riva.act('formPact', { members: [R, O, 'ada'], shares: { [R]: 40, [O]: 30, ada: 30 }, groups: ['light'], allyRent: 'free' })).pending)
+  await settle()
+  const pact = r.host.offers[0]
+  assert.deepEqual([pact.needs, pact.proxy], [[O], ['ada']])
+})
+
 test('a phone that missed a sync asks again and catches up', async () => {
   const { book, riva, otto, R } = await started()
   const lost = otto.receive
