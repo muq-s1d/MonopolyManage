@@ -28,16 +28,13 @@ export function ReleaseNotes({ onClose, all = false }: { onClose: () => void; al
   )
 }
 
-/** A short "what's new" block for the lobby. */
-export function LatestNotes({ onMore }: { onMore: () => void }) {
+/** One line in the lobby: the newest release's title, opening its notes. */
+export function NewsPill({ onOpen }: { onOpen: () => void }) {
   return (
-    <section className="lobby-news" aria-labelledby="news-h">
-      <p id="news-h" className="eyebrow">New in version {CURRENT.version}</p>
-      <p className="lobby-news-title">{CURRENT.title}</p>
-      <ul className="release-items compact">
-        {CURRENT.items.slice(0, 3).map(it => <li key={it.lead}><strong>{it.lead}.</strong> {it.text}</li>)}
-      </ul>
-      <button className="ghost" onClick={onMore}>Read the release notes</button>
-    </section>
+    <button className="news-pill" onClick={onOpen}>
+      <span className="tag">New in {CURRENT.version}</span>
+      <span>{CURRENT.title}</span>
+      <span aria-hidden="true">→</span>
+    </button>
   )
 }
