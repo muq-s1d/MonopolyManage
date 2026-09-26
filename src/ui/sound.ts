@@ -7,7 +7,7 @@ import { prefs } from '../store.ts'
 export type Sfx =
   | 'coin' | 'bigCoin' | 'jackpot' | 'pay' | 'rent' | 'buy' | 'house' | 'hotel' | 'sell'
   | 'mortgage' | 'unmortgage' | 'jail' | 'free' | 'card' | 'turn' | 'trade' | 'bankrupt'
-  | 'victory' | 'undo' | 'error' | 'tick' | 'shuffle' | 'start'
+  | 'victory' | 'undo' | 'error' | 'tick' | 'shuffle' | 'start' | 'pact'
 
 type Wave = 'pulse12' | 'pulse25' | 'pulse50' | 'triangle'
 type Voice = { at: number; f: number; d: number; w?: Wave; v?: number; to?: number; vib?: number }
@@ -72,6 +72,14 @@ const SFX: Record<Sfx, () => Voice[]> = {
   error: () => [{ at: 0, f: 140, d: 0.1, w: 'pulse50', v: 0.5 }, { at: 0.13, f: 110, d: 0.16, w: 'pulse50', v: 0.5 }],
   tick: () => [{ at: 0, f: hz('E6'), d: 0.035, w: 'pulse50', v: 0.22 }],
   shuffle: () => Array.from({ length: 9 }, (_, i) => ({ at: i * 0.045, f: hz(['C6', 'G5', 'E6', 'A5', 'D6', 'F5', 'B5', 'E5', 'C6'][i]), d: 0.04, w: 'pulse50' as Wave, v: 0.35 })),
+  // two voices answer each other, then land together: a handshake
+  pact: () => [
+    ...seq(0, [['G5', 0.08], ['C6', 0.14]], 'pulse25', 0.7),
+    ...seq(0.22, [['E5', 0.08], ['A5', 0.14]], 'pulse50', 0.55),
+    ...seq(0.44, [['C6', 0.34]], 'pulse25', 0.7),
+    ...seq(0.44, [['E5', 0.34]], 'pulse12', 0.45),
+    { at: 0.44, f: hz('C4'), d: 0.42, w: 'triangle', v: 0.9 },
+  ],
   start: () => [
     ...seq(0, [['C5', 0.08], ['G4', 0.08], ['C5', 0.08], ['E5', 0.08], ['G5', 0.16], ['C6', 0.4]], 'pulse25', 0.7),
     ...seq(0, [['C3', 0.32], ['G3', 0.16], ['C4', 0.5]], 'triangle', 1),
@@ -83,6 +91,11 @@ export function soundFor(e: Entry): Sfx {
   const ops = e.ops
   const has = (op: string) => ops.some(o => o.op === op)
   if (has('bankrupt')) return 'bankrupt'
+  const pact = ops.find(o => o.op === 'pact')
+  if (pact && pact.op === 'pact') return pact.pact ? 'pact' : 'sell'
+  const loan = ops.find(o => o.op === 'loan')
+  if (loan && loan.op === 'loan') return loan.loan ? 'bigCoin' : has('transfer') ? 'coin' : 'trade'
+  if (has('immunity')) return has('transfer') ? 'trade' : 'free'
   const jail = ops.find(o => o.op === 'jail')
   if (jail && jail.op === 'jail') return jail.in ? 'jail' : 'free'
   const build = ops.find(o => o.op === 'build')

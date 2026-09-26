@@ -10,6 +10,7 @@ const G = {
   cyl: new THREE.CylinderGeometry(1, 1, 1, 32),
   smile: new THREE.TorusGeometry(0.2, 0.045, 10, 28, Math.PI),
   ooh: new THREE.TorusGeometry(0.1, 0.045, 10, 24),
+  sash: new THREE.TorusGeometry(1.0, 0.075, 10, 56),
   ring: new THREE.TorusGeometry(1, 0.06, 10, 48),
   cone: new THREE.ConeGeometry(1, 1, 24),
   capsule: new THREE.CapsuleGeometry(0.09, 0.28, 6, 12),
@@ -44,6 +45,7 @@ export type CreatureProps = {
   proud: boolean
   reaction: Reaction
   reduced: boolean
+  sash?: string // pact colour: allies wear matching sashes
 }
 
 const damp = THREE.MathUtils.damp
@@ -126,6 +128,7 @@ export default function Creature(p: CreatureProps) {
   }), [p.player.color])
   const feet = useMemo(() => new THREE.MeshStandardMaterial({ color: new THREE.Color(p.player.color).multiplyScalar(0.55), roughness: 0.7 }), [p.player.color])
   const base = useMemo(() => new THREE.Color(p.player.color), [p.player.color])
+  const sashMat = useMemo(() => (p.sash ? new THREE.MeshStandardMaterial({ color: p.sash, roughness: 0.6, metalness: 0.15 }) : null), [p.sash])
   const phase = (p.player.seed % 1000) / 159
 
   useFrame(({ clock }, dt) => {
@@ -188,6 +191,12 @@ export default function Creature(p: CreatureProps) {
       <group ref={body}>
         <group position={[0, 0, 0]}>
           <mesh geometry={G.body} material={skin} scale={[1, 1.06, 0.95]} castShadow />
+          {sashMat && (
+            // a tilted belt well below the mouth; the body is about 0.86 wide and 0.82 deep at this height
+            <group position={[0, -0.52, 0]} rotation={[0, 0, 0.24]}>
+              <mesh geometry={G.sash} material={sashMat} rotation={[Math.PI / 2, 0, 0]} scale={[0.88, 0.84, 1]} />
+            </group>
+          )}
           <mesh geometry={G.ball} material={feet} position={[-0.38, -0.95, 0.25]} scale={[0.26, 0.13, 0.34]} />
           <mesh geometry={G.ball} material={feet} position={[0.38, -0.95, 0.25]} scale={[0.26, 0.13, 0.34]} />
           <group position={[-0.9, 0.08, 0.05]} rotation={[0, 0, -0.35]}>

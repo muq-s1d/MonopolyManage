@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { presets } from '../engine/boards.ts'
 import * as E from '../engine/engine.ts'
+import * as D from '../engine/deals.ts'
 import type { Entry, Err, Game, State } from '../engine/types.ts'
 import { hz, soundFor } from './sound.ts'
 
@@ -50,4 +51,22 @@ test('every kind of ledger entry gets the intended sound', () => {
   // b's bankruptcy handed the brown set back to a, so a can build up to a hotel
   for (let k = 0; k < 4; k++) { run(E.build(g, s, 1)); run(E.build(g, s, 3)) }
   assert.equal(soundFor(run(E.build(g, s, 1))), 'hotel')
+})
+
+test('deal entries get their own sounds', () => {
+  const g: Game = {
+    id: 'g', createdAt: 0, board: presets[0], rules: E.defaultRules,
+    players: ['a', 'b', 'c'].map((id, i) => ({ id, name: id, color: '#fff', accessory: i, seed: i })),
+  }
+  let s: State = E.initialState(g)
+  const log: Entry[] = []
+  const run = (x: Entry | Err) => { if (E.isErr(x)) throw new Error(x.error); log.push(x); s = E.replay(g, log); return x }
+  run(E.buy(g, s, 'a', 16)); run(E.buy(g, s, 'b', 18)); run(E.buy(g, s, 'b', 39))
+  assert.equal(soundFor(run(D.formPact(g, s, { members: ['a', 'b'], shares: { a: 50, b: 50 }, groups: ['orange'], allyRent: 'free' }))), 'pact')
+  assert.equal(soundFor(run(D.endPact(g, s, Object.keys(s.pacts)[0]))), 'sell')
+  const loan = run(D.lend(g, s, { lender: 'a', borrower: 'c', amount: 200, ratePct: 10, rounds: 2 }))
+  assert.equal(soundFor(loan), 'bigCoin')
+  assert.equal(soundFor(run(D.repayLoan(g, s, Object.keys(s.loans)[0]))), 'coin')
+  assert.equal(soundFor(run(D.grantPass(g, s, { holder: 'a', grantor: 'b', group: 'all', landings: 1, price: 20 }))), 'trade')
+  assert.equal(soundFor(run(D.usePass(g, s, Object.keys(s.immunities)[0], 39))), 'free')
 })
