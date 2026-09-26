@@ -5,7 +5,7 @@ import type { Live } from '../net/live.ts'
 
 export type DealTab = 'trade' | 'pact' | 'loan' | 'pass'
 
-export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'editor' | 'end' | 'join'
+export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'editor' | 'end' | 'join' | 'guide'
 
 export type SheetSpec =
   | { kind: 'landed' }

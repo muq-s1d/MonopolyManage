@@ -18,6 +18,7 @@ import { CURRENT } from './releases.ts'
 const BoardEditor = lazy(() => import('./editor/BoardEditor.tsx'))
 const Join = lazy(() => import('./ui/Join.tsx'))
 const Show = lazy(() => import('./ui/Show.tsx'))
+const Guide = lazy(() => import('./ui/Guide.tsx'))
 
 const noSub = () => () => {}
 
@@ -112,7 +113,7 @@ export default function App() {
   }), [show, live, phone, answer, view?.pid])
 
   // A game that vanished (cleared or rewound past the start) sends you back to the lobby.
-  const current = phone ? 'join' : snap ? screen : screen === 'editor' || screen === 'setup' || screen === 'join' ? screen : 'lobby'
+  const current = phone ? 'join' : snap ? screen : screen === 'editor' || screen === 'setup' || screen === 'join' || screen === 'guide' ? screen : 'lobby'
 
   useEffect(() => {
     if (!shown || (current !== 'table' && current !== 'join')) return
@@ -132,6 +133,7 @@ export default function App() {
       {current === 'ledger' && snap && <Ledger snap={snap} />}
       {current === 'end' && snap && <EndGame snap={snap} />}
       {current === 'editor' && <Suspense fallback={<p className="loading">Opening the drafting room</p>}><BoardEditor /></Suspense>}
+      {current === 'guide' && <Suspense fallback={<p className="loading">Opening the guide</p>}><Guide /></Suspense>}
       {current === 'join' && <Suspense fallback={<p className="loading">Opening the door</p>}><Join /></Suspense>}
       {shown && (current === 'table' || phone) && (live || prefs.get().scenes) && (
         <Suspense fallback={null}><Show game={shown.game} entries={shown.entries} me={phone ? view?.pid ?? null : null} voiced={!!live} /></Suspense>
