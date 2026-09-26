@@ -181,7 +181,7 @@ test('a trade is accepted, approved, and a stale one is refused with the reason'
 test('undo, once the host approves, rewinds every replica', async () => {
   const { host, book, riva, otto, R } = await started()
   await riva.act('buy', R, idx('Mediterranean Avenue'))
-  assert.ok((await riva.act('undo')).pending)
+  assert.ok((await riva.undo()).pending)
   await settle()
   assert.equal(host.offers[0].memo, 'Undo: Riva bought Mediterranean Avenue for $60')
   host.decide(host.offers[0].id, true)

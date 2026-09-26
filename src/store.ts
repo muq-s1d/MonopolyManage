@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { replay } from './engine/engine.ts'
 import type { Board, Entry, Game, State } from './engine/types.ts'
+import type { Seats } from './net/host.ts'
 
 type Save = { v: 1; game: Game; entries: Entry[] }
 export type Snap = { game: Game; entries: Entry[]; state: State } | null
@@ -8,10 +9,13 @@ export type Snap = { game: Game; entries: Entry[]; state: State } | null
 const KEY = 'counting-house.v1'
 const BOARDS = 'counting-house.boards.v1'
 const PREFS = 'counting-house.prefs'
+const SESSION = 'counting-house.session'
+const PHONE = 'counting-house.phone'
 
 const read = <T,>(key: string, fallback: T): T => {
   try { return JSON.parse(localStorage.getItem(key) ?? '') ?? fallback } catch { return fallback }
 }
+const drop = (key: string) => { try { localStorage.removeItem(key) } catch { /* ignore */ } }
 const write = (key: string, value: unknown) => {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage full or blocked: the game keeps running in memory */ }
 }
@@ -30,7 +34,7 @@ function set(next: Save | null) {
   save = next
   snap = derive(next)
   if (next) write(KEY, next)
-  else try { localStorage.removeItem(KEY) } catch { /* ignore */ }
+  else drop(KEY)
   subs.forEach(f => f())
 }
 
@@ -42,6 +46,7 @@ export const store = {
   /** Keep the first n entries. */
   rewind: (n: number) => save && set({ ...save, entries: save.entries.slice(0, n) }),
   clear: () => set(null),
+  subscribe: (f: () => void) => { subs.add(f); return () => { subs.delete(f) } },
   exportJson: () => JSON.stringify(save, null, 1),
   importJson(text: string): string | null {
     let x: unknown
@@ -53,7 +58,18 @@ export const store = {
   },
 }
 
-export const useSnap = () => useSyncExternalStore(f => (subs.add(f), () => subs.delete(f)), () => snap)
+export const useSnap = () => useSyncExternalStore(store.subscribe, () => snap)
+
+/** The session a host is running for the saved game, so a reload reopens the same room. */
+export type SessionRecord = Seats & { code: string; secret: string; game: string }
+/** A phone's seat, so a reload or a new battery reclaims it. */
+export type PhoneRecord = { code: string; token: string }
+export const sessions = {
+  host: () => { const r = read<SessionRecord | null>(SESSION, null); return r && r.game === snap?.game.id ? r : null },
+  saveHost: (r: SessionRecord | null) => (r ? write(SESSION, r) : drop(SESSION)),
+  phone: () => read<PhoneRecord | null>(PHONE, null),
+  savePhone: (r: PhoneRecord | null) => (r ? write(PHONE, r) : drop(PHONE)),
+}
 
 export const customBoards = {
   list: () => read<Board[]>(BOARDS, []),

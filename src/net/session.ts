@@ -3,7 +3,7 @@ import type { Entry, Game, Player } from '../engine/types.ts'
 
 /** A request waiting on the other players and then the host. */
 export type Offer = { id: string; from: string; name: string; args: unknown[]; memo: string; needs: string[]; accepted: string[] }
-export type NewPlayer = Pick<Player, 'name' | 'color' | 'accessory'>
+export type NewPlayer = Pick<Player, 'name' | 'color' | 'accessory'> & { seed?: number }
 
 /** Every message on a session channel. `me` is the sending phone's device id, `to` the device a reply is for. */
 export type Msg =

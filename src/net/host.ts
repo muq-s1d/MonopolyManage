@@ -73,7 +73,7 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
       if (started) return reply({ error: 'This game has already started. Ask the host to seat you.' })
       const why = joinProblem(m.player)
       if (why) return reply({ error: why })
-      const p: Player = { id: uid(), name: m.player.name.trim(), color: m.player.color, accessory: m.player.accessory, seed: Math.floor(Math.random() * 1e9) }
+      const p: Player = { id: uid(), name: m.player.name.trim(), color: m.player.color, accessory: m.player.accessory, seed: Number.isInteger(m.player.seed) ? m.player.seed! : Math.floor(Math.random() * 1e9) }
       players = [...players, p]
       token = crypto.randomUUID()
       seats[token] = p.id
@@ -180,6 +180,8 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
       changed()
     },
     decide,
+    /** Broadcast everything, for a host that has just (re)connected. */
+    announce: hello,
     get players() { return roster() },
     get offers() { return offers },
     get started() { return started },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 import { ArrowDown, ArrowUp, Shuffle, Trash2 } from 'lucide-react'
 import { presets } from '../engine/boards.ts'
@@ -6,7 +6,7 @@ import { defaultRules, money } from '../engine/engine.ts'
 import type { Player, Rules } from '../engine/types.ts'
 import { customBoards, store } from '../store.ts'
 import { useUI } from './ctx.ts'
-import { ACCESSORIES, PLAYER_COLORS, Seal, Switch } from './kit.tsx'
+import { ACCESSORIES, PhoneMark, PLAYER_COLORS, Seal, Switch } from './kit.tsx'
 import { sfx } from './sound.ts'
 
 export const RULES: { key: keyof Rules; label: string; help: string }[] = [
@@ -20,6 +20,9 @@ export const RULES: { key: keyof Rules; label: string; help: string }[] = [
   { key: 'noRentInJail', label: 'No rent from jail', help: 'Owners collect nothing while they sit in jail.' },
   { key: 'deals', label: 'Deals between players', help: 'Alliances that pool colour sets, loans with interest, and free rent passes. Not in the official rules.' },
 ]
+
+const HostPanel = lazy(() => import('./Join.tsx').then(m => ({ default: m.HostPanel })))
+const noSub = () => () => {}
 
 const uid = () => crypto.randomUUID().slice(0, 8)
 const randomSeed = () => Math.floor(Math.random() * 1e9)
@@ -37,7 +40,13 @@ export default function Setup() {
   const [cash, setCash] = useState<number | ''>(board.startingCash)
   const [salary, setSalary] = useState<number | ''>(board.salary)
   const [rules, setRules] = useState<Rules>(defaultRules)
-  const [players, setPlayers] = useState<Player[]>([])
+  // in a session the host keeps the roster, so phones joining and the host's own edits land in one list
+  const live = ui.live?.kind === 'host' ? ui.live : null
+  const [local, setLocal] = useState<Player[]>([])
+  useSyncExternalStore(live?.subscribe ?? noSub, () => live?.host.version ?? 0)
+  const players = live ? live.host.players : local
+  const setPlayers = (f: Player[] | ((ps: Player[]) => Player[])) =>
+    live ? live.host.setPlayers(typeof f === 'function' ? f(live.host.players) : f) : setLocal(f)
   const [name, setName] = useState('')
   const [nameError, setNameError] = useState('')
 
@@ -80,10 +89,12 @@ export default function Setup() {
   const ready = players.length >= 2 && cashOk && salaryOk
   const start = () => {
     if (!ready) return
-    store.start({
+    const game = {
       id: uid(), createdAt: Date.now(), rules, players,
       board: { ...structuredClone(board), startingCash: cash as number, salary: salary as number },
-    })
+    }
+    if (live) live.host.start(game)
+    else store.start(game)
     sfx('start')
     ui.go('table')
   }
@@ -91,13 +102,15 @@ export default function Setup() {
   return (
     <main className="setup">
       <header className="setup-head">
-        <button className="ghost" onClick={() => ui.go('lobby')}>Back</button>
+        <button className="ghost" onClick={() => { live?.close(); ui.setLive(null); ui.go('lobby') }}>Back</button>
         <div>
-          <p className="eyebrow">A new ledger</p>
+          <p className="eyebrow">{live ? `Session ${live.code}` : 'A new ledger'}</p>
           <h1 className="display">Seat the table</h1>
         </div>
         <button className="plaque big" disabled={!ready} onClick={start}>Open the bank</button>
       </header>
+
+      {live && <Suspense fallback={<p className="loading">Printing the code</p>}><HostPanel live={live} /></Suspense>}
 
       <div className="setup-grid">
         <section className="panel setup-players" aria-labelledby="players-h">
@@ -115,14 +128,15 @@ export default function Setup() {
           </form>
           <p id="name-err" className="error-text" role="alert">{nameError}</p>
 
-          {players.length === 0 && <p className="muted empty">Add everyone at the table. The list order is the turn order, so shuffle it or move people with the arrows.</p>}
+          {players.length === 0 && live && <p className="muted empty">Players who scan the code appear here. Add anyone without a phone by name.</p>}
+          {players.length === 0 && !live && <p className="muted empty">Add everyone at the table. The list order is the turn order, so shuffle it or move people with the arrows.</p>}
           <ol className="player-list">
             {players.map((p, i) => (
               <li key={p.id} className="player-row" style={{ viewTransitionName: `p-${p.id}` }}>
                 <span className="order num">{i + 1}</span>
                 <Seal player={p} size={48} />
                 <div className="player-row-main">
-                  <strong>{p.name}</strong>
+                  <strong>{p.name} {live && <PhoneMark live={live} pid={p.id} />}</strong>
                   <span className="muted small">{PLAYER_COLORS.find(c => c.hex === p.color)?.name}, wearing a {ACCESSORIES[p.accessory].toLowerCase()}</span>
                 </div>
                 <div className="player-row-tools">
