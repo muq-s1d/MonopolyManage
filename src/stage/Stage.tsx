@@ -55,13 +55,13 @@ const STEP = 0.72
 /** Coins per transfer grow with the log of the amount: one coin per doubling above 10. */
 export const coinCount = (amount: number) => Math.max(1, Math.min(10, Math.round(Math.log2(Math.max(amount, 10) / 10)) + 1))
 
-type Flight = { from: THREE.Vector3; to: THREE.Vector3; t0: number; dur: number }
+export type Flight = { from: THREE.Vector3; to: THREE.Vector3; t0: number; dur: number }
 const MAX_COINS = 80
 const coinGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.04, 24)
 const coinMat = new THREE.MeshStandardMaterial({ color: '#E8C872', metalness: 0.85, roughness: 0.3, emissive: '#7A5A14', emissiveIntensity: 0.6 })
 const tmp = new THREE.Object3D()
 
-function Coins({ flights }: { flights: RefObject<Flight[]> }) {
+export function Coins({ flights }: { flights: RefObject<Flight[]> }) {
   const ref = useRef<THREE.InstancedMesh>(null!)
   useFrame(({ invalidate }) => {
     const now = performance.now() / 1000

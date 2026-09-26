@@ -521,9 +521,11 @@ function MenuSheet({ game }: Props) {
   const ui = useUI()
   const [confirming, setConfirming] = useState(false)
   const [sound, setSound] = useState(prefs.get().sound !== false)
+  const [scenes, setScenes] = useState(prefs.get().scenes ?? !!ui.live)
   return (
     <Sheet eyebrow="The back office" title="Menu" onClose={ui.close}>
       <Switch label="Sound effects" help="Arcade chimes for buying, rent, building, jail, cards and more." checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v); if (v) sfx('coin') }} />
+      <Switch label="Cartoon scenes" help="A short animation at the top of the screen for every notable moment. On by default in sessions." checked={scenes} onChange={v => { prefs.set({ scenes: v }); setScenes(v) }} />
       <div className="menu-list">
         <button className="ghost" onClick={() => ui.go('end')}>Standings and end of game</button>
         <button className="ghost" onClick={() => ui.go('ledger')}>Open the ledger</button>
