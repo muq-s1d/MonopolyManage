@@ -401,6 +401,7 @@
 .phone-card h2 { font-size: 1.5rem; }
 .phone-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; font-size: 0.95rem; }
 .phone-lines li { display: grid; grid-template-columns: 2ch 1fr; gap: 0.5rem; }
+.phone-lines li.muted { display: block; } /* the empty state has no entry number */
 
 /* ---------- requests: deals waiting on the other side, then the host ---------- */
 .inbox { display: grid; gap: 0.5rem; padding: 0.9rem 1rem; border-color: var(--brass-hi); }
