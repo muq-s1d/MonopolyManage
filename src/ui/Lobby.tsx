@@ -46,7 +46,7 @@ export default function Lobby() {
         </p>
         <div className="diamond-rule" aria-hidden="true">◆</div>
         <div className="lobby-actions">
-          {snap && (
+          {snap && !saved && (
             <button className="plaque big" onClick={() => ui.go('table')}>
               Resume round {snap.state.round}
             </button>

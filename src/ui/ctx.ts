@@ -32,6 +32,8 @@ export type UI = {
   /** The session this device hosts or has joined, if any. Loaded lazily, so admin mode never downloads it. */
   live: Live | null
   setLive: (l: Live | null) => void
+  /** On a phone, the player this device is seated as. Null on the host screen and in admin mode. */
+  me: string | null
 }
 
 /** `#join=KQZMT`, from the QR code on the host screen. The host's own phone also carries `&host=<secret>`. */

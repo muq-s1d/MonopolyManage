@@ -370,7 +370,7 @@
 .swatch-pick:has(input:checked) { border-color: var(--brass-hi); box-shadow: inset 0 0 0 1px var(--brass-hi); background: var(--surface-2); }
 .swatch-pick:has(input:focus-visible) { outline: 2px solid var(--brass-hi); outline-offset: 2px; }
 .swatch.big { width: 20px; height: 20px; }
-.link-banner { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.6rem; margin: 0; padding: 0.5rem 0.9rem; border: 1px dashed var(--danger); border-radius: 12px; background: var(--surface); }
+.link-banner { position: sticky; top: 8px; z-index: 6; width: fit-content; margin-inline: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.6rem; margin: 0; padding: 0.5rem 0.9rem; border: 1px dashed var(--danger); border-radius: 12px; background: var(--surface); }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
 .dot.off { background: var(--danger); }
 
@@ -389,3 +389,15 @@
   .host-panel { grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .host-panel .chips { justify-content: center; }
 }
+
+/* ---------- the phone dashboard, laid out for 390 wide first ---------- */
+.phone { max-width: 560px; margin: 0 auto; padding: 8px 16px 32px; display: grid; gap: 0.9rem; }
+.phone-top { display: grid; grid-template-columns: auto 1fr auto auto; gap: 0.6rem; align-items: center; }
+.phone-hero { display: grid; justify-items: center; text-align: center; gap: 0.15rem; }
+.phone-stage { position: relative; width: 100%; height: 170px; display: grid; place-items: center; }
+.phone-name { margin: 0; display: flex; gap: 0.5rem; align-items: center; font-weight: 600; font-size: 1.1rem; }
+.phone-cash { font-size: 3rem; font-weight: 700; line-height: 1.05; }
+.phone-card { display: grid; gap: 0.4rem; padding: 1rem 1.1rem; }
+.phone-card h2 { font-size: 1.5rem; }
+.phone-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; font-size: 0.95rem; }
+.phone-lines li { display: grid; grid-template-columns: 2ch 1fr; gap: 0.5rem; }
