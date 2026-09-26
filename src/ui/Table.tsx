@@ -6,6 +6,7 @@ import { prefs, store, type Snap } from '../store.ts'
 import BoardMap from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
 import { Money, readable, Seal, webgl } from './kit.tsx'
+import { dueLoans, repayLoan } from '../engine/deals.ts'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
 
@@ -29,6 +30,7 @@ export function ThemeToggle() {
 
 function PlayerRail({ game, state }: { game: Game; state: State }) {
   const ui = useUI()
+  const owes = (pid: string) => Object.values(state.loans).reduce((t, l) => t + (l.borrower === pid ? l.repay : 0), 0)
   return (
     <ol className="rail" data-many={game.players.length >= 5} aria-label="Players in turn order">
       {game.players.map(p => {
@@ -47,6 +49,8 @@ function PlayerRail({ game, state }: { game: Game; state: State }) {
                   {out ? <span className="tag danger">Bankrupt</span> : <span className="tag">{deeds} {deeds === 1 ? 'deed' : 'deeds'}</span>}
                   {state.jailed[p.id] && <span className="tag danger">In jail</span>}
                   {state.jailCards[p.id] > 0 && <span className="tag">{state.jailCards[p.id]} jail {state.jailCards[p.id] === 1 ? 'card' : 'cards'}</span>}
+                  {Object.values(state.pacts).some(x => x.members.includes(p.id)) && <span className="tag pact-tag">Pact</span>}
+                  {owes(p.id) > 0 && <span className="tag danger">Owes {money(game.board, owes(p.id))}</span>}
                 </span>
               </span>
               {state.turn === p.id && <span className="rail-turn eyebrow">Turn</span>}
@@ -84,11 +88,24 @@ function TurnPanel({ game, state }: { game: Game; state: State }) {
         </div>
       )}
 
+      {dueLoans(state, p.id).map(l => {
+        const lender = game.players.find(x => x.id === l.lender)!
+        return (
+          <div key={l.id} className="due-box" role="status">
+            <p><strong>Loan from {lender.name} is due:</strong> <span className="num">{money(game.board, l.repay)}</span></p>
+            <div className="btn-row">
+              <button className="ghost" onClick={() => ui.act(repayLoan(game, state, l.id))}>Repay {money(game.board, l.repay)}</button>
+              <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>
+            </div>
+          </div>
+        )
+      })}
+
       <div className="turn-grid">
         <button className="plaque big span-2" onClick={() => ui.open({ kind: 'landed' })}>Landed on</button>
         <button className="ghost" onClick={() => ui.act(passGo(game, p.id))}>Passed Go <span className="num">+{money(game.board, game.board.salary)}</span></button>
         <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Build or mortgage</button>
-        <button className="ghost" onClick={() => ui.open({ kind: 'trade' })}>Trade</button>
+        <button className="ghost" onClick={() => ui.open({ kind: 'deals' })}>Deals</button>
         <button className="ghost" onClick={() => ui.open({ kind: 'payment' })}>Other payment</button>
       </div>
 
