@@ -26,6 +26,8 @@ export type UI = {
   say: (text: string) => void
   /** Remove the newest ledger entry, with its sound and a note. */
   undo: () => void
+  /** Open the release notes for every version. */
+  notes: () => void
 }
 
 export const UICtx = createContext<UI>(null!)

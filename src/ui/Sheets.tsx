@@ -530,6 +530,7 @@ function MenuSheet({ game }: Props) {
           Download a backup
         </button>
         <button className="ghost" onClick={() => ui.go('lobby')}>Back to the lobby</button>
+        <button className="ghost" onClick={ui.notes}>Release notes</button>
         {!confirming
           ? <button className="ghost danger" onClick={() => setConfirming(true)}>Delete this game</button>
           : (
