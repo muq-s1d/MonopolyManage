@@ -128,6 +128,13 @@ export function StageLights({ dark }: { dark: boolean }) {
   )
 }
 
+/** A pact member's sash takes the colour of the pact's first pooled set, so allies match and read as that set. */
+function sashFor(game: Game, state: State, pid: string) {
+  const pact = Object.values(state.pacts).find(x => x.members.includes(pid))
+  if (!pact) return undefined
+  return game.board.groups.find(g => g.id === pact.groups[0])?.color ?? '#C9A24B'
+}
+
 function Scene({ game, state, entries, reduced, dark }: { game: Game; state: State; entries: Entry[]; reduced: boolean; dark: boolean }) {
   const spots = useMemo(() => layout(game.players.length), [game.players.length])
   const idx = useMemo(() => new Map(game.players.map((p, i) => [p.id, i])), [game.players])
@@ -181,7 +188,7 @@ function Scene({ game, state, entries, reduced, dark }: { game: Game; state: Sta
           <Creature key={p.id} player={p} target={spots[i].pos} scale={spots[i].scale}
             active={state.turn === p.id && !state.bankrupt[p.id]} jailed={state.jailed[p.id]} bankrupt={state.bankrupt[p.id]}
             low={!state.bankrupt[p.id] && state.cash[p.id] < cheapest * 3} proud={owned}
-            reaction={reactions[p.id] ?? null} reduced={reduced} />
+            reaction={reactions[p.id] ?? null} reduced={reduced} sash={sashFor(game, state, p.id)} />
         )
       })}
       {game.players.length > 5 && (
