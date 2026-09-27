@@ -37,7 +37,7 @@ function useLabel(text: string, bg: string, ink: string, w = 256, h = 128) {
     c.width = w; c.height = h
     const g = c.getContext('2d')!
     g.fillStyle = bg; g.fillRect(0, 0, w, h)
-    g.fillStyle = ink; g.font = `700 ${Math.round(h * 0.42)}px Jost, system-ui, sans-serif`
+    g.fillStyle = ink; g.font = `700 ${Math.round(h * 0.42)}px "Plus Jakarta Sans", system-ui, sans-serif`
     g.textAlign = 'center'; g.textBaseline = 'middle'
     g.fillText(text, w / 2, h / 2 + 2, w * 0.9)
     const tex = new THREE.CanvasTexture(c)

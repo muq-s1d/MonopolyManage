@@ -4,7 +4,8 @@ import { presets } from '../engine/boards.ts'
 import * as E from '../engine/engine.ts'
 import * as D from '../engine/deals.ts'
 import type { Entry, Game, State } from '../engine/types.ts'
-import { gate } from './rules.ts'
+import { auctionProblem, gate } from './rules.ts'
+import { run } from '../engine/actions.ts'
 import { createHost, type Book } from './host.ts'
 import { createClient } from './client.ts'
 import type { Msg } from './session.ts'
@@ -30,16 +31,28 @@ test('permission table, each case checked by hand', () => {
   const { g, s, commit } = table()
   const med = idx('Mediterranean Avenue'), baltic = idx('Baltic Avenue')
   commit(E.buy(g, s(), 'otto', med))
-  // riva's turn: she may pay her own rent, never otto's move, and cleo must wait
-  assert.deepEqual(gate(g, s(), 'riva', 'payRent', ['riva', med]), { gate: 'now' })
-  assert.deepEqual(gate(g, s(), 'riva', 'payRent', ['otto', med]), { error: 'That is another player’s move' })
-  assert.deepEqual(gate(g, s(), 'cleo', 'payRent', ['cleo', med]), { error: 'Wait for your turn' })
-  // auctions belong to the host screen
-  assert.deepEqual(gate(g, s(), 'riva', 'buy', ['riva', baltic, 10]), { error: 'Auction wins are recorded on the host screen' })
-  assert.deepEqual(gate(g, s(), 'riva', 'buy', ['riva', baltic, 60]), { gate: 'now' })
-  // cards must come from the decks
-  assert.deepEqual(gate(g, s(), 'riva', 'drawCard', ['riva', US.chance[0]]), { gate: 'now' })
-  assert.deepEqual(gate(g, s(), 'riva', 'drawCard', ['riva', { title: 'Free money', effect: { type: 'collect', amount: 1e6 } }]), { error: 'That card is not in the decks' })
+  // riva's turn: she records her own landing, never otto's, and cleo must wait
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', med, { do: 'rent' }]), { gate: 'now' })
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['otto', med, { do: 'rent' }]), { error: 'That is another player’s move' })
+  assert.deepEqual(gate(g, s(), 'cleo', 'land', ['cleo', med, { do: 'rent' }]), { error: 'Wait for your turn' })
+  // landings go through land, so they count against the roll
+  assert.deepEqual(gate(g, s(), 'riva', 'payRent', ['riva', med]), { error: 'Tap the square you landed on to record it' })
+  assert.deepEqual(gate(g, s(), 'riva', 'buy', ['riva', baltic]), { error: 'Tap the square you landed on to buy it' })
+  assert.deepEqual(gate(g, s(), 'riva', 'passGo', ['riva']), { gate: 'host' }, 'Go is paid with the landing; a claim is a correction')
+  assert.deepEqual(gate(g, s(), 'riva', 'endTurn', []), { error: 'Tap the square you landed on first' })
+  // one landing per roll: once it is recorded, another needs doubles, or the host
+  commit(run(g, s(), 'land', 'riva', baltic))
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', baltic, { do: 'buy' }]), { error: 'That roll is already recorded. If it was the wrong square, ask the host to undo it.' })
+  assert.deepEqual(gate(g, s(), 'riva', 'endTurn', []), { gate: 'now' })
+  // auctions run live on the host; the old record-the-winner request is refused
+  assert.deepEqual(gate(g, s(), 'riva', 'buy', ['otto', baltic, 10]), { error: 'Auctions run live: tap Auction it' })
+  assert.equal(auctionProblem(g, s(), 'riva', baltic), null, 'riva stands on unowned Baltic')
+  assert.equal(auctionProblem(g, s(), 'otto', baltic), 'Only the player who landed there can auction it')
+  assert.equal(auctionProblem(g, s(), 'riva', idx('Boardwalk')), 'Auction the square you are standing on')
+  commit(run(g, s(), 'rollDoubles', 'riva'))
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', idx('Chance'), { do: 'card', card: US.chance[0] }]), { gate: 'now' }, 'doubles give another landing')
+  // the engine checks the card comes from the deck of the square
+  assert.equal((run(g, s(), 'land', 'riva', idx('Chance'), { do: 'card', card: { title: 'Free money', effect: { type: 'collect', amount: 1e6 } } }) as { error: string }).error, 'That card is not in this deck')
   // money: paying out of your own pocket is fine, taking it needs the host
   assert.deepEqual(gate(g, s(), 'cleo', 'transfer', ['cleo', 'bank', 10, '']), { gate: 'now' })
   assert.deepEqual(gate(g, s(), 'cleo', 'transfer', ['bank', 'cleo', 10, '']), { gate: 'host' })
@@ -88,7 +101,7 @@ const settle = () => new Promise(r => setTimeout(r, 5))
 function room() {
   const join = wire(), book = memoryBook()
   const said: string[] = []
-  const host = createHost(book, join(m => host.receive(m)), { colors: COLORS, accessories: 8, secret: 's3cret' })
+  const host = createHost(book, join(m => host.receive(m)), { colors: COLORS, accessories: 8, secret: 's3cret', auctionMs: { open: 60, bid: 40 } })
   const phone = (token?: string) => {
     const c = createClient(join(m => c.receive(m)), { token, onSay: t => said.push(t), timeoutMs: 500 })
     return c
@@ -131,16 +144,16 @@ test('an intent commits and every replica matches the host', async () => {
   const { book, riva, otto, R, O } = await started()
   const med = idx('Mediterranean Avenue')
   assert.equal(book.get()!.state.turn, R)
-  assert.equal((await otto.act('buy', O, med)).error, 'Wait for your turn')
-  assert.ok((await riva.act('buy', R, med)).ok)
-  assert.ok((await riva.act('goToJail', R, undefined)).ok, 'an omitted optional argument keeps its default over JSON')
+  assert.equal((await otto.act('land', O, med, { do: 'buy' })).error, 'Wait for your turn')
+  assert.ok((await riva.act('land', R, med, { do: 'buy' })).ok)
+  assert.equal((await riva.act('land', R, med)).error, 'That roll is already recorded. If it was the wrong square, ask the host to undo it.')
   assert.ok((await riva.act('endTurn')).ok)
-  assert.ok((await otto.act('payRent', O, med, {})).ok)
+  assert.ok((await otto.act('land', O, med, { do: 'rent' }, undefined)).ok, 'an omitted optional argument keeps its default over JSON')
   await settle()
   const s = book.get()!.state
   assert.equal(s.cash[R], 1500 - 60 + 2)
   assert.equal(s.cash[O], 1500 - 2)
-  assert.equal(book.get()!.entries[1].memo, 'Riva went to jail')
+  assert.equal(book.get()!.entries[2].memo, 'Otto paid Riva $2 rent on Mediterranean Avenue. Base rent on Mediterranean Avenue.')
   same(riva.get().state, s)
   same(otto.get().state, s)
 })
@@ -148,9 +161,9 @@ test('an intent commits and every replica matches the host', async () => {
 test('a trade is accepted, approved, and a stale one is refused with the reason', async () => {
   const { host, book, riva, otto, R, O, said } = await started()
   const med = idx('Mediterranean Avenue'), baltic = idx('Baltic Avenue')
-  await riva.act('buy', R, med)
+  await riva.act('land', R, med, { do: 'buy' })
   await riva.act('endTurn')
-  await otto.act('buy', O, baltic)
+  await otto.act('land', O, baltic, { do: 'buy' })
   const side = (cells: number[], cash = 0) => ({ cells, cash, jailCards: 0 })
   assert.ok((await riva.act('trade', R, O, side([med]), side([baltic], 10))).pending)
   await settle()
@@ -180,7 +193,7 @@ test('a trade is accepted, approved, and a stale one is refused with the reason'
 
 test('undo, once the host approves, rewinds every replica', async () => {
   const { host, book, riva, otto, R } = await started()
-  await riva.act('buy', R, idx('Mediterranean Avenue'))
+  await riva.act('land', R, idx('Mediterranean Avenue'), { do: 'buy' })
   assert.ok((await riva.undo()).pending)
   await settle()
   assert.equal(host.offers[0].memo, 'Undo: Riva bought Mediterranean Avenue for $60')
@@ -212,7 +225,7 @@ test('the host’s own phone can approve; other phones cannot', async () => {
   assert.equal((await riva.seat({ name: 'Riva', color: COLORS[1], accessory: 0 }, 'guess')).admin, false)
   r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
   await settle()
-  await boss.act('passGo', boss.get().pid!)
+  await boss.act('land', boss.get().pid!, idx('Baltic Avenue'))
   await riva.undo()
   await settle()
   const id = r.host.offers[0].id
@@ -235,7 +248,7 @@ test('a deal with a player who has no phone waits only for the host', async () =
   await settle()
   const R = riva.get().pid!, O = otto.get().pid!
   const med = idx('Mediterranean Avenue')
-  await riva.act('buy', R, med)
+  await riva.act('land', R, med, { do: 'buy' })
   const side = (cells: number[], cash = 0) => ({ cells, cash, jailCards: 0 })
   assert.ok((await riva.act('trade', R, 'ada', side([med]), side([], 50))).pending)
   await settle()
@@ -244,12 +257,8 @@ test('a deal with a player who has no phone waits only for the host', async () =
   assert.equal(r.host.decide(x.id, true), null)
   assert.equal(r.book.get()!.state.owner[med], 'ada')
   // a pact with a phone player and a phoneless one waits for the phone, then the host; each holds a light blue
-  await riva.act('buy', R, idx('Oriental Avenue'))
-  await riva.act('endTurn')
-  await otto.act('buy', O, idx('Vermont Avenue'))
-  await otto.act('endTurn')
-  const s = r.book.get()!
-  r.book.commit(E.buy(s.game, s.state, 'ada', idx('Connecticut Avenue')) as Entry) // Ada's go, played on the host screen
+  const deal = (pid: string, cell: string) => { const s = r.book.get()!; r.book.commit(E.buy(s.game, s.state, pid, idx(cell)) as Entry) }
+  deal(R, 'Oriental Avenue'); deal(O, 'Vermont Avenue'); deal('ada', 'Connecticut Avenue') // bought on earlier turns
   assert.ok((await riva.act('formPact', { members: [R, O, 'ada'], shares: { [R]: 40, [O]: 30, ada: 30 }, groups: ['light'], allyRent: 'free' })).pending)
   await settle()
   const pact = r.host.offers[0]
@@ -260,10 +269,54 @@ test('a phone that missed a sync asks again and catches up', async () => {
   const { book, riva, otto, R } = await started()
   const lost = otto.receive
   otto.receive = () => {} // otto's link drops for a moment
-  await riva.act('buy', R, idx('Mediterranean Avenue'))
-  await riva.act('passGo', R)
+  await riva.act('land', R, idx('Mediterranean Avenue'), { do: 'buy' })
+  await riva.act('rollDoubles', R)
   otto.receive = lost
+  await riva.act('land', R, idx('Vermont Avenue'))
   await riva.act('endTurn')
   await settle()
   same(otto.get().state, book.get()!.state)
+})
+
+test('a live auction: steps set by the auctioneer, bids from phones and for a phoneless player, the top bid wins', async () => {
+  const r = room()
+  const riva = r.phone(), otto = r.phone()
+  await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
+  await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
+  r.host.setPlayers([...r.host.players, { id: 'ada', name: 'Ada', color: COLORS[2], accessory: 0, seed: 1 }])
+  r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
+  await settle()
+  const R = riva.get().pid!, O = otto.get().pid!, baltic = idx('Baltic Avenue')
+  assert.equal((await riva.startAuction(baltic, [10, 20])).error, 'Auction the square you are standing on', 'first she has to land there')
+  await riva.act('land', R, baltic)
+  assert.equal((await otto.startAuction(baltic, [10])).error, 'Only the player who landed there can auction it')
+  assert.equal((await riva.startAuction(baltic, [0])).error, 'Pick one to four bid steps between 1 and 1,000')
+  assert.ok((await riva.startAuction(baltic, [20, 10])).ok)
+  await settle()
+  assert.deepEqual(otto.get().auction?.steps, [10, 20], 'every phone sees the auction, steps smallest first')
+  otto.bid(20)
+  await settle()
+  riva.bid(25) // not one of the steps
+  await settle()
+  assert.ok(r.said.includes('That is not one of the bid steps'))
+  riva.bid(30)
+  await settle()
+  assert.equal(r.host.bid('ada', r.host.auction!.id, 50), null, 'the host screen bids for Ada, who has no phone')
+  await settle()
+  assert.deepEqual(otto.get().auction?.high, { pid: 'ada', amount: 50 })
+  riva.bid(null); otto.bid(null)
+  await settle()
+  // everyone else is out, so the hammer falls at once
+  assert.equal(r.book.get()!.state.owner[baltic], 'ada')
+  assert.equal(r.book.get()!.state.cash.ada, 1500 - 50)
+  assert.equal(riva.get().auction, null)
+  assert.equal(r.book.get()!.entries.at(-1)!.memo, 'Ada won the auction for Baltic Avenue for $50')
+  // an auction nobody bids on ends on the clock, and the deed stays with the bank
+  const s = r.book.get()!
+  r.book.commit(E.endTurn(s.game, s.state))
+  await otto.act('land', O, idx('Oriental Avenue'))
+  assert.ok((await otto.startAuction(idx('Oriental Avenue'), [10])).ok)
+  await new Promise(res => setTimeout(res, 120))
+  assert.equal(r.book.get()!.state.owner[idx('Oriental Avenue')], null)
+  assert.ok(r.said.includes('Nobody bid on Oriental Avenue. It stays with the bank.'))
 })

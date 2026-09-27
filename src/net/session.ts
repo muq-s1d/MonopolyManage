@@ -4,18 +4,31 @@ import type { Entry, Game, Player } from '../engine/types.ts'
 /** A request waiting on the other players and then the host. */
 /** `needs` must each say yes on their phone; `proxy` have no phone, so the host's Approve is their yes. */
 export type Offer = { id: string; from: string; name: string; args: unknown[]; memo: string; needs: string[]; accepted: string[]; proxy?: string[] }
+/**
+ * A live auction on the host. `steps`: the raises the auctioneer allows, each bid is the top bid plus one of them.
+ * `ms`: time left when sent, since phone clocks differ from the host's.
+ */
+export type Auction = { id: string; cell: number; by: string; steps: number[]; high: { pid: string; amount: number } | null; out: string[]; ms: number }
+
+/** Checks the raises an auctioneer picked: one to four whole amounts from 1 to 1,000, smallest first. */
+export function cleanSteps(x: unknown): number[] | null {
+  if (!Array.isArray(x) || !x.length || x.length > 4 || !x.every(n => Number.isInteger(n) && n >= 1 && n <= 1000)) return null
+  return [...new Set(x as number[])].sort((a, b) => a - b)
+}
 export type NewPlayer = Pick<Player, 'name' | 'color' | 'accessory'> & { seed?: number }
 
 /** Every message on a session channel. `me` is the sending phone's device id, `to` the device a reply is for. */
 export type Msg =
   | { t: 'hi'; me: string }
-  | { t: 'hello'; game: Game | null; entries: Entry[]; players: Player[]; seated: string[]; offers: Offer[] }
+  | { t: 'hello'; game: Game | null; entries: Entry[]; players: Player[]; seated: string[]; offers: Offer[]; auction?: Auction | null }
   | { t: 'seat'; me: string; id: string; token?: string; player?: NewPlayer; host?: string; claim?: string }
   | { t: 'do'; me: string; id: string; token: string; name: string; args: unknown[] }
   | { t: 'done'; to: string; id: string; ok?: true; pending?: true; error?: string; pid?: string; token?: string; admin?: boolean }
   | { t: 'answer'; me: string; token: string; offer: string; yes: boolean }
   | { t: 'decide'; me: string; token: string; offer: string; yes: boolean }
   | { t: 'offers'; offers: Offer[] }
+  | { t: 'auction'; auction: Auction | null }
+  | { t: 'bid'; me: string; token: string; auction: string; amount: number | null } // null: out of the bidding
   | { t: 'sync'; keep: number; add: Entry[]; n: number }
   | { t: 'say'; pids: string[]; text: string; error?: boolean }
   | { t: 'bye' }

@@ -55,6 +55,11 @@ export default function App() {
   const [notes, setNotes] = useState<'new' | 'all' | null>(() => (prefs.get().seenRelease === CURRENT.version ? null : 'new'))
   const closeNotes = useCallback(() => { prefs.set({ seenRelease: CURRENT.version }); setNotes(null) }, [])
   const timer = useRef(0)
+  // an auction takes the screen on every device: a sheet left open would sit on top of the bids
+  const hostSub = live?.kind === 'host' ? live.subscribe : noSub
+  const hostAuction = useSyncExternalStore(hostSub, () => (live?.kind === 'host' ? live.host.auction?.id ?? null : null))
+  const auctionId = phone ? view?.auction?.id ?? null : hostAuction
+  useEffect(() => { if (auctionId) setSheet(null) }, [auctionId])
 
   const show = useCallback((t: Toast, ms: number) => {
     clearTimeout(timer.current)

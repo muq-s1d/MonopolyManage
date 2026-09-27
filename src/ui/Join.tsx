@@ -4,7 +4,7 @@ import { heardHost, isHostHere, phoneSession, type HostLive, type PhoneLive } fr
 import { cleanCode } from '../net/session.ts'
 import { sessions } from '../store.ts'
 import { joinLink, useUI } from './ctx.ts'
-import { ACCESSORIES, PLAYER_COLORS, Seal, wearing } from './kit.tsx'
+import { ACCESSORIES, PLAYER_COLORS, Seal } from './kit.tsx'
 import Phone from './Phone.tsx'
 import { sfx } from './sound.ts'
 
@@ -92,7 +92,7 @@ function Seated({ live }: { live: PhoneLive }) {
       <p className="eyebrow">Session {live.code}</p>
       <Seal player={me} size={120} />
       <h1 className="display">You are in, {me.name}</h1>
-      <p className="muted">Wearing {wearing(me.accessory)}. The host starts the game once everyone is seated.</p>
+      <p className="muted">Waiting for the host to start.</p>
       <ul className="join-roster" aria-label="Seated so far">
         {view.players.map(p => <li key={p.id}><Seal player={p} size={32} initial={false} />{p.name}</li>)}
       </ul>
@@ -202,7 +202,7 @@ function ClaimStep({ live }: { live: PhoneLive }) {
       <h1 className="display">The game has started</h1>
       {asked ? <p>Asked the host to seat this phone as {players.find(p => p.id === asked)?.name}. Waiting for a yes…</p> : (
         <>
-          <p className="muted">New players cannot join once the bank is open. Already playing on another phone, or on the host screen? Pick your seat and the host approves this phone.</p>
+          <p className="muted">The game has started. Pick your seat and the host lets this phone in.</p>
           <ul className="claim-list">
             {players.map(p => (
               <li key={p.id}><button className="ghost" onClick={() => claim(p.id)}><Seal player={p} size={28} initial={false} /> I am {p.name}</button></li>
@@ -230,16 +230,16 @@ export function HostPanel({ live }: { live: HostLive }) {
       <div className="host-panel-text">
         <p className="eyebrow">Scan to join, or enter the code</p>
         <p className="session-code num" aria-label={`Code ${live.code.split('').join(' ')}`}>{live.code}</p>
-        <p className="muted small">Open {location.host} on a phone and tap Join a session. Players appear below as they sit down.</p>
+        <p className="muted small">Or open {location.host} and tap Join a session.</p>
         <p className="field-label">Where do you play?</p>
         <div className="chips" role="radiogroup" aria-label="Where do you play">
           {([['screen', 'On this screen'], ['phone', 'On my phone'], ['none', 'Not playing']] as const).map(([k, label]) => (
             <button key={k} role="radio" aria-checked={where === k} className="ghost" onClick={() => setWhere(k)}>{label}</button>
           ))}
         </div>
-        <p className="muted small">{where === 'screen' ? 'Add yourself below like a player without a phone. You take your turns here.'
-          : where === 'phone' ? 'Scan this code with your own phone. It seats you like everyone else, and it also gets the approval inbox.'
-          : 'You run the bank from this screen and approve requests. You have no seat.'}</p>
+        <p className="muted small">{where === 'screen' ? 'Add yourself below by name.'
+          : where === 'phone' ? 'Scan this code with your phone. It can approve requests too.'
+          : 'You run the bank. You have no seat.'}</p>
       </div>
       {where === 'phone' && (
         <div className="qr qr-host" role="img" aria-label="QR code for the host's own phone" dangerouslySetInnerHTML={{ __html: mine }} />

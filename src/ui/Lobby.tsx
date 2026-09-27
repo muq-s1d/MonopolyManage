@@ -47,10 +47,7 @@ export default function Lobby() {
       <section className="lobby-card">
         <p className="eyebrow">Est. at your kitchen table</p>
         <h1 className="display lobby-title">The Counting House</h1>
-        <p className="lobby-lede">
-          The bank for your physical board game nights. Roll real dice, move real pieces, and let the ledger handle every dollar,
-          deed and house.
-        </p>
+        <p className="lobby-lede">The bank for your board game nights. You roll the dice, it keeps the money.</p>
         <NewsPill onOpen={ui.notes} />
 
         <div className="lobby-groups">

@@ -10,15 +10,15 @@ import { ACCESSORIES, PhoneMark, PLAYER_COLORS, Seal, Switch } from './kit.tsx'
 import { sfx } from './sound.ts'
 
 export const RULES: { key: keyof Rules; label: string; help: string }[] = [
-  { key: 'freeParking', label: 'Free Parking jackpot', help: 'Taxes, fines and card payments go into a pot. Landing on Free Parking takes it all.' },
-  { key: 'auctions', label: 'Auctions', help: 'When a player passes on a property, the table bids for it.' },
-  { key: 'doubleGo', label: 'Double salary on Go', help: 'Landing exactly on Go pays twice the salary.' },
-  { key: 'setDoubleRent', label: 'Double rent on a full set', help: 'Owning every property of a colour doubles the rent on the ones without houses. Official rule.' },
-  { key: 'evenBuild', label: 'Build evenly', help: 'Houses go up and come down one property at a time across a colour set. Official rule.' },
-  { key: 'bankLimit', label: 'Limited houses and hotels', help: 'The bank only has the board’s supply, normally 32 houses and 12 hotels. Official rule.' },
-  { key: 'mortgageInterest', label: 'Mortgage interest', help: 'Lifting a mortgage costs 10% extra, and receiving a mortgaged deed in a trade costs 10% right away. Official rule.' },
-  { key: 'noRentInJail', label: 'No rent from jail', help: 'Owners collect nothing while they sit in jail.' },
-  { key: 'deals', label: 'Deals between players', help: 'Alliances that pool colour sets, loans with interest, and free rent passes. Not in the official rules.' },
+  { key: 'freeParking', label: 'Free Parking jackpot', help: 'Taxes and fines go into a pot. Free Parking wins it.' },
+  { key: 'auctions', label: 'Auctions', help: 'A deed nobody buys goes to the highest bidder.' },
+  { key: 'doubleGo', label: 'Double salary on Go', help: 'Landing right on Go pays double.' },
+  { key: 'setDoubleRent', label: 'Double rent on a full set', help: 'A full colour set doubles the base rent.' },
+  { key: 'evenBuild', label: 'Build evenly', help: 'Houses go up one street at a time.' },
+  { key: 'bankLimit', label: 'Limited houses and hotels', help: 'The bank has 32 houses and 12 hotels.' },
+  { key: 'mortgageInterest', label: 'Mortgage interest', help: 'Paying off a mortgage costs 10% extra.' },
+  { key: 'noRentInJail', label: 'No rent from jail', help: 'Owners in jail collect nothing.' },
+  { key: 'deals', label: 'Deals between players', help: 'Pacts, loans and free rent passes.' },
 ]
 
 const HostPanel = lazy(() => import('./Join.tsx').then(m => ({ default: m.HostPanel })))
@@ -128,8 +128,8 @@ export default function Setup() {
           </form>
           <p id="name-err" className="error-text" role="alert">{nameError}</p>
 
-          {players.length === 0 && live && <p className="muted empty">Players who scan the code appear here. Add anyone without a phone by name.</p>}
-          {players.length === 0 && !live && <p className="muted empty">Add everyone at the table. The list order is the turn order, so shuffle it or move people with the arrows.</p>}
+          {players.length === 0 && live && <p className="muted empty">Players who scan the code appear here.</p>}
+          {players.length === 0 && !live && <p className="muted empty">Add everyone, in turn order.</p>}
           <ol className="player-list">
             {players.map((p, i) => (
               <li key={p.id} className="player-row" style={{ viewTransitionName: `p-${p.id}` }}>
@@ -165,7 +165,7 @@ export default function Setup() {
               </button>
             ))}
           </div>
-          <p className="muted small">Own a different edition? <button className="link" onClick={() => ui.go('editor')}>Design your own board</button> and it will appear here.</p>
+          <p className="muted small">Another edition? <button className="link" onClick={() => ui.go('editor')}>Design a board</button></p>
           <div className="two-col">
             <label className="field">
               <span>Starting cash</span>

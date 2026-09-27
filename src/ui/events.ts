@@ -1,6 +1,6 @@
 import { money, name } from '../engine/engine.ts'
 import type { Entry, Game, Party } from '../engine/types.ts'
-import { soundFor, type Sfx } from './sound.ts'
+import { moment, soundFor, type Sfx } from './sound.ts'
 
 /** How this device sees a moment: its own player paid, got paid, or someone else's business. */
 export type Viewpoint = 'me-paid' | 'me-got' | 'watch'
@@ -29,17 +29,17 @@ const isPlayer = (p: Party | null | undefined): p is string => !!p && p !== 'ban
 export function eventFor(g: Game, e: Entry, me: string | null): Ev | null {
   const kind = soundFor(e)
   if (kind === 'turn' || kind === 'tick') return null
-  const net: Record<string, number> = {}
-  for (const o of e.ops) if (o.op === 'transfer') {
+  const net: Record<string, number> = {}, ops = moment(e.ops)
+  for (const o of ops) if (o.op === 'transfer') {
     net[o.from] = (net[o.from] ?? 0) - o.amount
     net[o.to] = (net[o.to] ?? 0) + o.amount
   }
   const parties = Object.keys(net)
   const from = parties.reduce<string | null>((a, p) => (net[p] < 0 && (!a || net[p] < net[a]) ? p : a), null)
   const to = parties.reduce<string | null>((a, p) => (net[p] > 0 && (!a || net[p] > net[a]) ? p : a), null)
-  const op = e.ops.find(o => o.op === 'jail' || o.op === 'jailCard' || o.op === 'bankrupt' || o.op === 'own')
+  const op = ops.find(o => o.op === 'jail' || o.op === 'jailCard' || o.op === 'bankrupt' || o.op === 'own')
   const actor = [from, to, op && 'player' in op ? op.player : op && 'owner' in op ? op.owner : null].find(isPlayer) ?? null
-  const cellOp = e.ops.find(o => o.op === 'own' || o.op === 'build' || o.op === 'mortgage')
+  const cellOp = ops.find(o => o.op === 'own' || o.op === 'build' || o.op === 'mortgage')
   const mine = me ? net[me] ?? 0 : 0
   const view: Viewpoint = mine < 0 ? 'me-paid' : mine > 0 ? 'me-got' : 'watch'
 

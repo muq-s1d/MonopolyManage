@@ -112,13 +112,12 @@ function TradePanel({ game, state }: Props) {
   const result = useMemo(() => (a && bId && a !== bId ? E.trade(game, state, a, bId, side(give), side(get)) : { error: 'Pick two different players' }), [game, state, a, bId, give, get])
   return (
     <>
-      <p className="muted deal-help">Tick what each player hands over. Either side can add money too.</p>
       <div className="trade-grid">
         <TradeSide game={game} state={state} pid={a} setPid={id => { setA(id); setGive(emptySide()) }} side={give} set={setGive} choices={players} label="First player" />
         <span className="trade-swap" aria-hidden="true"><ArrowLeftRight size={22} /></span>
         <TradeSide game={game} state={state} pid={bId} setPid={id => { setB(id); setGet(emptySide()) }} side={get} set={setGet} choices={players} label="Second player" />
       </div>
-      {game.rules.mortgageInterest && <p className="muted small">Getting a mortgaged property? The new owner pays the bank a 10% fee on its mortgage right away.</p>}
+      {game.rules.mortgageInterest && <p className="muted small">A mortgaged deed costs its new owner a 10% fee.</p>}
       <Foot result={result} act={() => ui.act('trade', a, bId, side(give), side(get))} label="Shake on it" />
     </>
   )
@@ -189,10 +188,7 @@ function PactPanel({ game, state }: Props) {
         </section>
       )}
       <p className="eyebrow">{editing ? `Editing the ${E.pactName(game.board, state.pacts[editing])}` : 'A new pact'}</p>
-      <p className="muted small deal-help">
-        Allies pool the deeds they own in the chosen sets. Every deed keeps its owner, but a set held entirely by the pact can be built on,
-        and building costs and rent are split by the shares below. Dissolving sells the pact's buildings back at half price and splits the refund.
-      </p>
+      <p className="muted small deal-help">Allies pool their deeds in a set, so they can build on it and split rent by share.</p>
 
       <p className="field-label">Who is in it</p>
       <div className="chips">
@@ -240,11 +236,11 @@ function PactPanel({ game, state }: Props) {
             ))}
             <button className="ghost" disabled={!groups.length} onClick={() => setManual(null)}>Suggest a fair split</button>
           </div>
-          <p className="muted small">Type one share and the others adjust to keep 100%. A fair split follows the printed value of the deeds each ally pools.</p>
+          <p className="muted small">Shares always add up to 100%.</p>
         </>
       )}
 
-      <Switch label="Allies pay rent" help="Off: allies stay free on the pact's deeds. On: they pay, and the rent goes to the other allies by share."
+      <Switch label="Allies pay rent" help="Off: allies land for free."
         checked={allyRent === 'paid'} onChange={v => setAllyRent(v ? 'paid' : 'free')} />
 
       <Foot result={result} act={() => ui.act('formPact', draft, editing)} label={editing ? 'Save the pact' : 'Sign the pact'} extra={editing && <button className="ghost" onClick={reset}>Cancel edit</button>} />
@@ -309,7 +305,7 @@ function LoanPanel({ game, state }: Props) {
           <input className="input num" type="number" inputMode="numeric" min={1} max={50} value={rounds} onChange={e => setRounds(num(e.target.value))} />
         </label>
       </div>
-      <p className="muted small deal-help">Interest is added once. When the due round arrives, the table reminds the borrower on their turn.</p>
+      <p className="muted small deal-help">The borrower is reminded on their turn when it is due.</p>
       <Foot result={result} act={() => ui.act('lend', d)} label="Hand over the money" />
     </>
   )
@@ -368,7 +364,7 @@ function PassPanel({ game, state }: Props) {
           <input className="input num" type="number" inputMode="numeric" min={0} value={price} onChange={e => setPrice(num(e.target.value))} />
         </label>
       </div>
-      <p className="muted small deal-help">Each landing on a covered deed uses one pass instead of paying rent. Deeds pooled in a pact are not covered, so shared rent stays fair.</p>
+      <p className="muted small deal-help">Each landing on a covered deed uses one free pass.</p>
       <Foot result={result} act={() => ui.act('grantPass', pass)} label="Sell the pass" />
     </>
   )

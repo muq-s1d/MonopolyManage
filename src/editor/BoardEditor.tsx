@@ -95,7 +95,7 @@ function Start({ open }: { open: (b: Board) => void }) {
       <div className="setup-grid">
         <section className="panel">
           <h2 className="display">Start from a classic</h2>
-          <p className="muted">Copy a standard board, then rename streets, change prices and rents, recolour the sets and rewrite the cards to match your edition.</p>
+          <p className="muted">Copy a standard board and change it to match your edition.</p>
           <div className="board-choices">
             {presets.map(b => (
               <button key={b.id} className="board-choice" onClick={() => open({ ...structuredClone(b), id: `custom-${uid()}`, name: `${b.name} (my edition)` })}>
@@ -131,7 +131,7 @@ function Start({ open }: { open: (b: Board) => void }) {
               </li>
             ))}
           </ul>
-          <p className="muted small">Games already in progress keep their own copy of the board, so editing here never changes a running game.</p>
+          <p className="muted small">Running games keep their own copy.</p>
         </section>
       </div>
     </main>
@@ -299,7 +299,7 @@ export default function BoardEditor() {
 
       {tab === 'sets' && (
         <section className="panel" role="tabpanel">
-          <p className="muted">A colour set is the group of properties someone must own completely before building. Assign properties to sets on the Squares tab.</p>
+          <p className="muted">Assign properties to sets on the Squares tab.</p>
           <ul className="group-list">
             {board.groups.map((g, i) => {
               const used = board.cells.filter(c => c.kind === 'property' && c.group === g.id).length

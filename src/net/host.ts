@@ -1,8 +1,8 @@
 import { run, type ActionName, type ActionArgs } from '../engine/actions.ts'
 import { active, endTurn, isErr, name } from '../engine/engine.ts'
 import type { Entry, Err, Game, Player, State } from '../engine/types.ts'
-import { gate } from './rules.ts'
-import type { Msg, NewPlayer, Offer } from './session.ts'
+import { auctionProblem, gate } from './rules.ts'
+import { cleanSteps, type Auction, type Msg, type NewPlayer, type Offer } from './session.ts'
 
 /** The ledger the host commits to: the saved store in the app, a plain object in tests. */
 export type Book = {
@@ -23,6 +23,8 @@ type Opts = {
   secret: string
   resume?: Seats
   onChange?: () => void
+  /** Auction clock: time to open the bidding, and time after each bid before the hammer falls. */
+  auctionMs?: { open: number; bid: number }
 }
 
 const uid = () => crypto.randomUUID().slice(0, 8)
@@ -49,7 +51,7 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
   const hello = () => {
     const s = snap()
     sent = s && { game: s.game, entries: s.entries }
-    send({ t: 'hello', game: s?.game ?? null, entries: s?.entries ?? [], players: roster(), seated: Object.values(seats), offers })
+    send({ t: 'hello', game: s?.game ?? null, entries: s?.entries ?? [], players: roster(), seated: Object.values(seats), offers, auction: auctionView() })
   }
   const sendOffers = () => { send({ t: 'offers', offers }); changed() }
   const say = (pids: string[], text: string, error = false) => send({ t: 'say', pids, text, error })
@@ -65,6 +67,73 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     send({ t: 'sync', keep, add: s.entries.slice(keep), n: s.entries.length })
     changed()
   })
+
+  // ---------- live auction: every phone bids, the host screen bids for players without one ----------
+  // ponytail: kept in memory only; a host reload mid-auction drops it, and the player auctions again
+  const clock = o.auctionMs ?? { open: 20000, bid: 10000 }
+  let auction: (Omit<Auction, 'ms'> & { ends: number; timer: ReturnType<typeof setTimeout> }) | null = null
+  const auctionView = (): Auction | null => auction && { id: auction.id, cell: auction.cell, by: auction.by, steps: auction.steps, high: auction.high, out: auction.out, ms: Math.max(0, auction.ends - Date.now()) }
+  const sendAuction = () => { send({ t: 'auction', auction: auctionView() }); changed() }
+  const arm = (ms: number) => {
+    clearTimeout(auction!.timer)
+    auction!.ends = Date.now() + ms
+    auction!.timer = setTimeout(hammer, ms)
+  }
+
+  function startAuction(pid: string, cell: number, raises: unknown): string | null {
+    const s = snap(), steps = cleanSteps(raises)
+    if (!s) return 'The game has not started yet'
+    if (auction) return 'An auction is already running'
+    if (!steps) return 'Pick one to four bid steps between 1 and 1,000'
+    const why = auctionProblem(s.game, s.state, pid, cell)
+    if (why) return why
+    auction = { id: uid(), cell, by: pid, steps, high: null, out: [], ends: 0, timer: 0 as never }
+    arm(clock.open)
+    sendAuction()
+    return null
+  }
+
+  /** A bid, or `null` to drop out. Wrong bids are ignored: the phones only offer valid ones. */
+  function bid(pid: string, id: string, amount: number | null): string | null {
+    const s = snap()
+    if (!auction || auction.id !== id || !s) return 'That auction is over'
+    if (s.state.bankrupt[pid] || auction.out.includes(pid)) return 'You are out of this auction'
+    if (amount === null) auction.out = [...auction.out, pid]
+    else {
+      const top = auction.high?.amount ?? 0
+      if (!auction.steps.some(k => top + k === amount)) return amount <= top ? 'Someone bid first. Try again.' : 'That is not one of the bid steps'
+      if (amount > s.state.cash[pid]) return `${name(s.game, pid)} does not have ${s.game.board.currency}${amount}`
+      auction.high = { pid, amount }
+      arm(clock.bid)
+    }
+    const left = active(s.game, s.state).filter(p => !auction!.out.includes(p.id))
+    if (!left.length || (auction.high && left.length === 1 && left[0].id === auction.high.pid)) hammer()
+    else sendAuction()
+    return null
+  }
+
+  function hammer() {
+    const a = auction, s = snap()
+    if (!a) return
+    clearTimeout(a.timer)
+    auction = null
+    sendAuction()
+    if (!s) return
+    const everyone = s.game.players.map(p => p.id), c = s.game.board.cells[a.cell]
+    if (!a.high) return say(everyone, `Nobody bid on ${c.name}. It stays with the bank.`)
+    const x = exec(s.game, s.state, 'buy', [a.high.pid, a.cell, a.high.amount])
+    if (isErr(x)) return say(everyone, `The auction for ${c.name} fell through: ${x.error}`, true)
+    book.commit(x)
+  }
+
+  function cancelAuction() {
+    if (!auction) return
+    clearTimeout(auction.timer)
+    const s = snap()
+    if (s) say(s.game.players.map(p => p.id), `The host stopped the auction for ${s.game.board.cells[auction.cell].name}`)
+    auction = null
+    sendAuction()
+  }
 
   function seat(m: Extract<Msg, { t: 'seat' }>) {
     const reply = (x: Omit<Extract<Msg, { t: 'done' }>, 't' | 'to' | 'id'>) => send({ t: 'done', to: m.me, id: m.id, ...x })
@@ -122,6 +191,7 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     if (!pid) return reply({ error: 'This phone has no seat' })
     if (!s) return reply({ error: 'The game has not started yet' })
     const args = Array.isArray(m.args) ? m.args : []
+    if (m.name === 'auction') { const why = startAuction(pid, Number(args[0]), args[1]); return reply(why ? { error: why } : { ok: true }) }
     const g = gate(s.game, s.state, pid, m.name, args)
     if ('error' in g) return reply(g)
     if (g.gate === 'now') {
@@ -197,6 +267,13 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
         case 'do': return request(m)
         case 'answer': return seats[m.token] ? answer(seats[m.token], m.offer, m.yes) : undefined
         case 'decide': return admins.has(m.token) ? void decide(m.offer, m.yes) : undefined
+        case 'bid': {
+          const pid = seats[m.token]
+          if (!pid) return
+          const why = bid(pid, m.auction, m.amount)
+          if (why) say([pid], why, true)
+          return
+        }
       }
     },
     /** Pre-start roster edits from the host screen: add a phoneless player, reorder, remove. */
@@ -214,6 +291,11 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
       changed()
     },
     decide,
+    startAuction,
+    /** The host screen bids for a player without a phone. */
+    bid,
+    cancelAuction,
+    get auction() { return auctionView() },
     /** Broadcast everything, for a host that has just (re)connected. */
     announce: hello,
     get players() { return roster() },
@@ -224,6 +306,6 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     get devices() { return Object.fromEntries(Object.values(seats).map(pid => [pid, devices[pid] ?? ''])) },
     save: (): Seats => ({ seats: { ...seats }, admins: [...admins] }),
     subscribe(f: () => void) { subs.add(f); return () => { subs.delete(f) } },
-    close() { off(); send({ t: 'bye' }) },
+    close() { off(); if (auction) clearTimeout(auction.timer); send({ t: 'bye' }) },
   }
 }

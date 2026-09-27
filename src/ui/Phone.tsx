@@ -10,6 +10,8 @@ import { involves } from './Ledger.tsx'
 import Inbox from './Inbox.tsx'
 import { sfx } from './sound.ts'
 import { ThemeToggle, TurnPanel } from './Table.tsx'
+import BoardMap, { reachable } from './BoardMap.tsx'
+import AuctionDock from './Auction.tsx'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
 const Podium = lazy(() => import('../stage/Podium.tsx'))
@@ -28,8 +30,17 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
   const deeds = state.owner.filter(o => o === me.id).length
   const over = active(game, state).length <= 1
 
+  const myTurn = state.turn === me.id && !over && !state.bankrupt[me.id]
+  const moving = myTurn && !state.jailed[me.id] && state.moves > 0
+  const cardMove = !!entries.at(-1)?.ops.some(o => o.op === 'moves')
+  const board = (
+    <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell, landed: moving })}
+      reach={moving && !cardMove ? reachable(game, state, me.id) : undefined} highlight={state.pos[me.id]}
+      hint={moving ? (cardMove ? 'Tap where the card sends you' : 'Tap the number you rolled') : undefined} />
+  )
+
   return (
-    <div className="phone">
+    <div className={`phone${view.auction ? ' has-dock' : ''}`}>
       <header className="phone-top">
         <span className={`dot${isHostHere(live.wire()) ? '' : ' off'}`} aria-hidden="true" />
         <span className="muted small">Session {live.code}, round <span className="num">{state.round}</span></span>
@@ -39,11 +50,13 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
 
       <section className="phone-hero" aria-label="You">
         <div className="phone-stage">
-          {webgl ? <Suspense fallback={<Seal player={me} size={96} />}><Stage game={mine} state={state} entries={entries} /></Suspense> : <Seal player={me} size={96} />}
+          {webgl ? <Suspense fallback={<Seal player={me} size={72} />}><Stage game={mine} state={state} entries={entries} /></Suspense> : <Seal player={me} size={72} />}
         </div>
-        <p className="phone-name">{me.name}{state.jailed[me.id] && <span className="tag danger">In jail</span>}{state.bankrupt[me.id] && <span className="tag danger">Bankrupt</span>}</p>
-        <Money value={w.cash} cur={game.board.currency} className="phone-cash" />
-        <p className="muted small">Net worth <strong className="num">{m(w.total)}</strong>: cash, {deeds} {deeds === 1 ? 'deed' : 'deeds'} at printed price, buildings at cost{w.loans ? `, and ${w.loans > 0 ? `${m(w.loans)} you are owed` : `${m(-w.loans)} you owe`}` : ''}.</p>
+        <div className="phone-id">
+          <p className="phone-name">{me.name}{state.jailed[me.id] && <span className="tag danger">In jail</span>}{state.bankrupt[me.id] && <span className="tag danger">Bankrupt</span>}</p>
+          <Money value={w.cash} cur={game.board.currency} className="phone-cash" />
+          <p className="muted small">Worth <strong className="num">{m(w.total)}</strong> with {deeds} {deeds === 1 ? 'deed' : 'deeds'}{w.loans ? `, ${w.loans > 0 ? `${m(w.loans)} owed to you` : `${m(-w.loans)} you owe`}` : ''}</p>
+        </div>
       </section>
 
       <Inbox game={game} offers={view.offers} me={me.id} admin={view.admin} answer={live.client.answer} decide={live.client.decide} />
@@ -57,18 +70,18 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
           <p className="muted">The full standings are on the host screen.</p>
         </section>
       ) : state.bankrupt[me.id] ? (
-        <section className="panel phone-card"><h2 className="display">You are out of the game</h2><p className="muted">Keep watching the host screen for the finish.</p></section>
-      ) : state.turn === me.id ? (
-        <TurnPanel key={`${state.turn}:${turns}`} game={game} state={state} />
+        <section className="panel phone-card"><h2 className="display">You are out of the game</h2></section>
+      ) : myTurn ? (
+        <TurnPanel key={`${state.turn}:${turns}`} game={game} state={state} board={board} />
       ) : (
         <section className="panel phone-card" aria-labelledby="wait-h">
           <p className="eyebrow">Round {state.round}</p>
           <h2 id="wait-h" className="display">{name(game, state.turn)} is playing</h2>
-          <p className="muted small">You can still build, mortgage, pay and make deals while you wait.</p>
-          <div className="turn-grid">
+          {board}
+          <div className="turn-tools">
             <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: me.id })}>Build or mortgage</button>
             <button className="ghost" onClick={() => ui.open({ kind: 'deals' })}>Deals</button>
-            <button className="ghost span-2" onClick={() => ui.open({ kind: 'payment' })}>Other payment</button>
+            <button className="ghost" onClick={() => ui.open({ kind: 'payment' })}>Pay or collect</button>
           </div>
         </section>
       )}
@@ -84,6 +97,7 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
         </ol>
       </section>
 
+      {view.auction && <AuctionDock game={game} state={state} auction={view.auction} me={me.id} onBid={live.client.bid} />}
       {menu && <PhoneMenu onClose={() => setMenu(false)} onLeave={onLeave} code={live.code} />}
     </div>
   )
@@ -95,8 +109,8 @@ function PhoneMenu({ onClose, onLeave, code }: { onClose: () => void; onLeave: (
   const [leaving, setLeaving] = useState(false)
   return (
     <Sheet eyebrow={`Session ${code}`} title="Menu" onClose={onClose}>
-      <Switch label="Sound effects" help="Chimes for your own money and for big moments at the table." checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v); if (v) sfx('coin') }} />
-      <Switch label="Cartoon scenes" help="A short animation for every notable moment at the table." checked={scenes} onChange={v => { prefs.set({ scenes: v }); setScenes(v) }} />
+      <Switch label="Sound effects" checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v); if (v) sfx('coin') }} />
+      <Switch label="Cartoon scenes" checked={scenes} onChange={v => { prefs.set({ scenes: v }); setScenes(v) }} />
       <div className="menu-list">
         {!leaving ? <button className="ghost danger" onClick={() => setLeaving(true)}>Leave the session</button> : (
           <div className="confirm-box" role="alert">

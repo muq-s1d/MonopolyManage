@@ -48,10 +48,7 @@ export default function EndGame({ snap }: { snap: NonNullable<Snap> }) {
 
       <section className="panel">
         <table className="standings">
-          <caption className="muted">
-            Net worth follows the official rule for timed games: cash, plus every deed at its printed price (half if mortgaged),
-            plus houses and hotels at what they cost to build.
-          </caption>
+          <caption className="muted">Net worth: cash, deeds at printed price (half if mortgaged), buildings at cost.</caption>
           <thead>
             <tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Cash</th><th scope="col">Deeds</th><th scope="col">Buildings</th><th scope="col">Net worth</th></tr>
           </thead>

@@ -70,3 +70,19 @@ test('deal entries get their own sounds', () => {
   assert.equal(soundFor(run(D.grantPass(g, s, { holder: 'a', grantor: 'b', group: 'all', landings: 1, price: 20 }))), 'trade')
   assert.equal(soundFor(run(D.usePass(g, s, Object.keys(s.immunities)[0], 39))), 'free')
 })
+
+test('a landing sounds like what happened on the square, not the Go salary on the way', async () => {
+  const { land } = await import('../engine/actions.ts')
+  const US = presets[0]
+  const g: Game = { id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: ['a', 'b'].map((id, i) => ({ id, name: id, color: '#fff', accessory: i, seed: i })) }
+  const log: Entry[] = []
+  let s: State = E.initialState(g)
+  const run = (x: Entry | Err) => { if (E.isErr(x)) throw new Error(x.error); log.push(x); s = E.replay(g, log); return x }
+  run(land(g, s, 'a', 39, { do: 'buy' }))
+  run(E.endTurn(g, s)); run(E.endTurn(g, s))
+  const wrapped = run(land(g, s, 'a', 5, { do: 'buy' })) // Boardwalk to Reading wraps past Go
+  assert.equal(wrapped.ops.filter(o => o.op === 'transfer').length, 2, 'salary and price in one entry')
+  assert.equal(soundFor(wrapped), 'buy')
+  assert.equal(soundFor(run(land(g, s, 'b', 5, { do: 'rent' }))), 'rent')
+  assert.equal(soundFor(run(land(g, s, 'b', 0))), 'bigCoin', 'landing on Go with nothing else is the salary')
+})

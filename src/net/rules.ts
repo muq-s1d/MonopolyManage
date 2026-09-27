@@ -1,7 +1,7 @@
-import { ACTIONS, type ActionName } from '../engine/actions.ts'
+import { ACTIONS, type ActionName, type Landing } from '../engine/actions.ts'
 import { pactFor } from '../engine/engine.ts'
-import { passFor, type LoanDraft, type PactDraft, type PassDraft } from '../engine/deals.ts'
-import type { Card, Game, Party, State } from '../engine/types.ts'
+import { type LoanDraft, type PactDraft, type PassDraft } from '../engine/deals.ts'
+import type { Game, Party, State } from '../engine/types.ts'
 
 /** What happens to a phone's request: run it now, collect the other side's yes then the host's, or ask the host. */
 export type Gate = { gate: 'now' } | { gate: 'deal'; needs: string[] } | { gate: 'host' } | { error: string }
@@ -23,31 +23,23 @@ export function gate(g: Game, s: State, me: string, name: string, args: unknown[
   const mine = (pid: unknown, gate = NOW): Gate =>
     pid !== me ? { error: 'That is another player’s move' } : turn ? gate : { error: 'Wait for your turn' }
   switch (name as ActionName) {
-    case 'buy': {
-      const [pid, cell, price] = args as [string, number, number?]
-      if (price !== undefined && price !== g.board.cells[cell]?.price) return { error: 'Auction wins are recorded on the host screen' }
-      return mine(pid)
+    case 'land': {
+      const [pid, , how] = args as [string, number, Landing?]
+      if (how?.do === 'rent' && ![undefined, 1, 2].includes(how.opts?.railroadMultiplier)) return { error: 'Unknown rent multiplier' }
+      const g2 = mine(pid)
+      if ('error' in g2) return g2
+      return s.moves > 0 ? NOW : { error: s.jailed[me] ? 'You are in jail' : 'That roll is already recorded. If it was the wrong square, ask the host to undo it.' }
     }
-    case 'payRent': {
-      const [pid, , opts] = args as [string, number, { railroadMultiplier?: number }?]
-      if (![undefined, 1, 2].includes(opts?.railroadMultiplier)) return { error: 'Unknown rent multiplier' }
-      return mine(pid)
+    case 'rollDoubles': return mine(a[0])
+    case 'endTurn': {
+      const g2 = mine(me)
+      return 'error' in g2 || s.moves === 0 ? g2 : { error: 'Tap the square you landed on first' }
     }
-    case 'usePass': {
-      const [id, cell] = args as [string, number]
-      return passFor(g, s, me, cell)?.id === id ? mine(me) : { error: 'That pass does not cover this deed' }
-    }
-    case 'payTax': case 'passGo': case 'collectPot': case 'leaveJail': return mine(a[0])
-    case 'goToJail': {
-      const [pid, why] = args as [string, string?]
-      return why === undefined || why === 'rolled doubles three times and went to jail' ? mine(pid) : { error: 'Unknown reason' }
-    }
-    case 'drawCard': {
-      const [pid, card] = args as [string, Card]
-      const real = [...g.board.chance, ...g.board.chest].some(c => JSON.stringify(c) === JSON.stringify(card))
-      return real ? mine(pid) : { error: 'That card is not in the decks' }
-    }
-    case 'endTurn': return mine(me)
+    case 'buy': return { error: a[2] === undefined ? 'Tap the square you landed on to buy it' : 'Auctions run live: tap Auction it' }
+    case 'payRent': case 'payTax': case 'drawCard': case 'collectPot': case 'usePass':
+      return { error: 'Tap the square you landed on to record it' }
+    case 'passGo': case 'goToJail': return mine(a[0], HOST) // passing Go is paid with the landing; anything else is a correction
+    case 'leaveJail': return mine(a[0])
     case 'build': case 'sell': {
       const cell = a[0] as number
       return s.owner[cell] === me || pactFor(g, s, cell)?.members.includes(me) ? NOW : { error: 'Not your deed' }
@@ -70,4 +62,14 @@ export function gate(g: Game, s: State, me: string, name: string, args: unknown[
     case 'grantPass': { const d = a[0] as PassDraft; return deal(me, [d?.holder, d?.grantor]) }
     case 'bankrupt': return a[0] === me ? HOST : { error: 'Only you can declare yourself bankrupt' }
   }
+}
+
+/** Whether this player may put a square up for auction: the unowned one they just landed on and left. */
+export function auctionProblem(g: Game, s: State, me: string, cell: number): string | null {
+  if (!g.rules.auctions) return 'Auctions are off in this game'
+  if (s.turn !== me) return 'Only the player who landed there can auction it'
+  const c = g.board.cells[cell]
+  if (!c?.price || s.owner[cell]) return 'Only an unowned deed can be auctioned'
+  if (s.pos[me] !== cell) return 'Auction the square you are standing on'
+  return null
 }

@@ -82,13 +82,16 @@ export type Op =
   | { op: 'own'; cell: number; owner: string | null }
   | { op: 'build'; cell: number; level: number }
   | { op: 'mortgage'; cell: number; on: boolean }
-  | { op: 'jail'; player: string; in: boolean }
+  | { op: 'jail'; player: string; in: boolean; rolled?: true } // rolled: left on doubles, which ends the rolling
   | { op: 'jailCard'; player: string; delta: number }
   | { op: 'turn'; player: string }
   | { op: 'bankrupt'; player: string }
   | { op: 'pact'; id: string; pact: Pact | null }
   | { op: 'loan'; id: string; loan: Loan | null }
   | { op: 'immunity'; id: string; immunity: Immunity | null }
+  | { op: 'at'; player: string; cell: number }   // a landing: uses up one of the turn's moves
+  | { op: 'moves'; delta: number; back?: true } // a card that moves the player grants one more landing; back: moving backwards
+  | { op: 'doubles' }                           // another roll, so another landing
 
 export type Entry = { at: number; memo: string; ops: Op[] }
 
@@ -108,6 +111,10 @@ export type State = {
   pacts: Record<string, Pact>
   loans: Record<string, Loan>
   immunities: Record<string, Immunity>
+  pos: Record<string, number>      // the square each player stands on
+  moves: number                    // landings the current player may still record this turn
+  doubles: number                  // doubles rolled this turn
+  back: boolean                    // the next landing is a move backwards (a card), so it cannot pass Go
 }
 
 export type Err = { error: string; short?: number; who?: string }

@@ -20,6 +20,7 @@ export function initialState(g: Game): State {
     jailed: per(false), jailTurns: per(0), jailCards: per(0), bankrupt: per(false),
     turn: g.players[0]?.id ?? '', round: 1,
     pacts: {}, loans: {}, immunities: {},
+    pos: per(0), moves: 1, doubles: 0, back: false,
   }
 }
 
@@ -40,7 +41,17 @@ export function apply(s: State, o: Op, g: Game) {
     case 'own': s.owner[o.cell] = o.owner; break
     case 'build': s.level[o.cell] = o.level; break
     case 'mortgage': s.mortgaged[o.cell] = o.on; break
-    case 'jail': s.jailed[o.player] = o.in; s.jailTurns[o.player] = 0; break
+    case 'jail': {
+      s.jailed[o.player] = o.in
+      s.jailTurns[o.player] = 0
+      if (o.in) s.pos[o.player] = g.board.cells.findIndex(c => c.kind === 'jail')
+      if (o.player === s.turn) s.moves = o.in ? 0 : 1 // jail ends the moving; leaving it gives one move
+      if (o.rolled) s.doubles = 3 // doubles that open the cell do not roll again
+      break
+    }
+    case 'at': s.pos[o.player] = o.cell; s.back = false; if (o.player === s.turn) s.moves = Math.max(0, s.moves - 1); break
+    case 'moves': s.moves = Math.max(0, s.moves + o.delta); s.back = !!o.back; break
+    case 'doubles': s.doubles++; s.moves++; break
     case 'jailCard': s.jailCards[o.player] += o.delta; break
     case 'bankrupt': s.bankrupt[o.player] = true; break
     case 'pact': put(s.pacts, o.id, o.pact); break
@@ -51,6 +62,9 @@ export function apply(s: State, o: Op, g: Game) {
       if (ids.indexOf(o.player) <= ids.indexOf(s.turn)) s.round++
       s.turn = o.player
       if (s.jailed[o.player]) s.jailTurns[o.player]++
+      s.moves = s.jailed[o.player] ? 0 : 1
+      s.doubles = 0
+      s.back = false
     }
   }
 }
@@ -298,7 +312,7 @@ export function leaveJail(g: Game, s: State, pid: string, how: 'fine' | 'card' |
       { op: 'jailCard', player: pid, delta: -1 }, { op: 'jail', player: pid, in: false },
     ])
   }
-  if (how === 'roll') return entry(`${name(g, pid)} rolled doubles and left jail`, [{ op: 'jail', player: pid, in: false }])
+  if (how === 'roll') return entry(`${name(g, pid)} rolled doubles and left jail`, [{ op: 'jail', player: pid, in: false, rolled: true }])
   const e = need(g, s, pid, g.board.jailFine)
   if (e) return e
   return entry(`${name(g, pid)} paid the ${money(g.board, g.board.jailFine)} fine and left jail`, [
@@ -310,7 +324,7 @@ export function leaveJail(g: Game, s: State, pid: string, how: 'fine' | 'card' |
 export const cardTitle = (b: Board, c: Card) =>
   c.title.replace('{cell}', c.effect.type === 'advance' ? b.cells[c.effect.cell].name : '')
 
-/** Money and jail cards. Movement cards (advance, nearest, move) are driven by the UI's landed on flow. */
+/** Money and jail cards. A movement card (advance, nearest, move) grants one more landing, recorded next. */
 export function drawCard(g: Game, s: State, pid: string, card: Card): Entry | Err {
   const b = g.board, f = card.effect, who = name(g, pid), t = cardTitle(b, card)
   const others = active(g, s).filter(p => p.id !== pid)
@@ -345,7 +359,8 @@ export function drawCard(g: Game, s: State, pid: string, card: Card): Entry | Er
     case 'jail': return goToJail(g, pid, `drew "${t}" and went to jail`)
     case 'jailCard':
       return entry(`${who} drew "${t}" and kept it`, [{ op: 'jailCard', player: pid, delta: 1 }])
-    default: return { error: 'Movement card: pick where the player landed' }
+    case 'move': return entry(`${who} drew "${t}"`, [{ op: 'moves', delta: 1, back: true }])
+    default: return entry(`${who} drew "${t}"`, [{ op: 'moves', delta: 1 }])
   }
 }
 

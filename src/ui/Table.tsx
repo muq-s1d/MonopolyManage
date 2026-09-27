@@ -1,16 +1,19 @@
-import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
-import { BookOpen, Menu, Moon, Sun, Undo2 } from 'lucide-react'
+import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { BookOpen, CircleCheck, Dice5, Menu, Moon, Sun, Undo2 } from 'lucide-react'
 import { active, money, nextPlayer } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
 import { prefs, store, type Snap } from '../store.ts'
-import BoardMap from './BoardMap.tsx'
+import BoardMap, { reachable } from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
 import { Money, PhoneMark, readable, Seal, webgl } from './kit.tsx'
 import Inbox from './Inbox.tsx'
 import type { HostLive } from '../net/live.ts'
 import { dueLoans } from '../engine/deals.ts'
+import AuctionDock from './Auction.tsx'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
+const narrowQuery = matchMedia('(max-width: 980px)') // the one column layout in screens.css
+const onNarrow = (f: () => void) => { narrowQuery.addEventListener('change', f); return () => narrowQuery.removeEventListener('change', f) }
 
 export function ThemeToggle() {
   const [dark, setDark] = useState(() => {
@@ -64,12 +67,19 @@ function PlayerRail({ game, state }: { game: Game; state: State }) {
   )
 }
 
-export function TurnPanel({ game, state }: { game: Game; state: State }) {
+/**
+ * The current player's turn, one step at a time: tap where the roll landed, answer "was it a double?", pass the dice.
+ * `onOverride`: the host screen may record another landing after the roll's one is used, to fix a wrong tap.
+ */
+export function TurnPanel({ game, state, onOverride, board }: { game: Game; state: State; onOverride?: () => void; board?: ReactNode }) {
   const ui = useUI()
   const p = game.players.find(x => x.id === state.turn)!
   const next = game.players.find(x => x.id === nextPlayer(game, state))!
-  const [doubles, setDoubles] = useState(0) // reset by the key on TurnPanel when the turn changes
   const jailed = state.jailed[p.id]
+  const moving = !jailed && state.moves > 0
+  const landed = !jailed && state.moves === 0
+  const here = game.board.cells[state.pos[p.id]]
+  const endTurn = <button className="plaque big end-turn" onClick={() => ui.act('endTurn')}>End turn <small>{next.name} is next</small></button>
 
   return (
     <section className="panel turn" aria-labelledby="turn-h">
@@ -77,11 +87,11 @@ export function TurnPanel({ game, state }: { game: Game; state: State }) {
       <h2 id="turn-h" className="display turn-title"><span className="turn-name" style={{ ['--pc' as string]: readable(p.color) }}>{p.name}</span>&rsquo;s turn</h2>
 
       {jailed && state.jailTurns[p.id] === 0 && (
-        <p className="jail-box" role="status"><strong>Sent to jail.</strong> Going to jail ends the turn, so pass the dice on.</p>
+        <p className="jail-box" role="status"><strong>Sent to jail.</strong> The turn is over.</p>
       )}
       {jailed && state.jailTurns[p.id] > 0 && (
         <div className="jail-box" role="status">
-          <p><strong>In jail</strong>, turn {state.jailTurns[p.id]} of 3. {state.jailTurns[p.id] >= 3 ? 'Without doubles this turn, the fine must be paid.' : 'Roll for doubles, pay the fine, or use a card.'}</p>
+          <p><strong>In jail</strong>, try {state.jailTurns[p.id]} of 3.{state.jailTurns[p.id] >= 3 ? ' No doubles means paying the fine.' : ''}</p>
           <div className="btn-row">
             <button className="ghost" onClick={() => ui.act('leaveJail', p.id, 'roll')}>Rolled doubles</button>
             <button className="ghost" onClick={() => ui.act('leaveJail', p.id, 'fine')}>Pay {money(game.board, game.board.jailFine)} fine</button>
@@ -103,29 +113,55 @@ export function TurnPanel({ game, state }: { game: Game; state: State }) {
         )
       })}
 
-      <div className="turn-grid">
-        <button className="plaque big span-2" onClick={() => ui.open({ kind: 'landed' })}>Landed on</button>
-        <button className="ghost" onClick={() => ui.act('passGo', p.id)}>Passed Go <span className="num">+{money(game.board, game.board.salary)}</span></button>
+      {moving && (
+        <div className="step" role="status">
+          <Dice5 size={28} aria-hidden="true" />
+          <p><strong>{state.doubles ? 'Doubles! Roll again' : 'Roll the dice'}, move {p.id === ui.me ? 'your' : `${p.name}'s`} piece, then tap where it lands.</strong></p>
+        </div>
+      )}
+      {moving && state.doubles === 2 && (
+        <div className="jail-box">
+          <p>Two doubles. A third one means jail.</p>
+          <button className="ghost danger" onClick={() => ui.act('rollDoubles', p.id)}>Rolled a third double</button>
+        </div>
+      )}
+      {board}
+      {landed && (
+        <p className="step done" role="status"><CircleCheck size={24} aria-hidden="true" /> <span>Landed on <strong>{here.name}</strong></span></p>
+      )}
+
+      {!moving && (
+        <div className="turn-end">
+          {landed && state.doubles < 2 ? (
+            <>
+              <p className="turn-ask">Was that roll a double?</p>
+              <button className="ghost big" onClick={() => ui.act('rollDoubles', p.id)}>Yes, roll again</button>
+              {endTurn}
+            </>
+          ) : endTurn}
+        </div>
+      )}
+      {landed && onOverride && <button className="link-btn" onClick={onOverride}>Wrong square? Undo it, or record another landing</button>}
+
+      <div className="turn-tools" role="group" aria-label="Any time">
         <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Build or mortgage</button>
         <button className="ghost" onClick={() => ui.open({ kind: 'deals' })}>Deals</button>
-        <button className="ghost" onClick={() => ui.open({ kind: 'payment' })}>Other payment</button>
-      </div>
-
-      <div className="turn-end">
-        {doubles > 0 && doubles < 3 && <p className="muted small">{p.name} rolls again. Record the landing, then roll once more.</p>}
-        {!jailed && <button className="ghost" onClick={() => setDoubles(d => d + 1)} disabled={doubles >= 3}>
-          Rolled doubles{doubles ? <span className="num"> ({doubles} of 3)</span> : null}
-        </button>}
-        {doubles >= 3 ? (
-          <button className="plaque danger big" onClick={() => { ui.act('goToJail', p.id, 'rolled doubles three times and went to jail'); setDoubles(0) }}>
-            Third doubles: to jail
-          </button>
-        ) : (
-          <button className="plaque big" onClick={() => ui.act('endTurn')}>Next: {next.name}</button>
-        )}
+        <button className="ghost" onClick={() => ui.open({ kind: 'payment' })}>Pay or collect</button>
       </div>
     </section>
   )
+}
+
+function HostAuction({ live, game, state }: { live: HostLive; game: Game; state: State }) {
+  const ui = useUI()
+  const v = useSyncExternalStore(live.subscribe, () => live.host.version)
+  const a = live.host.auction
+  const ends = useMemo(() => Date.now() + (a?.ms ?? 0), [v, a?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!a) return null
+  const phoned = live.host.devices
+  const bid = (pid: string, n: number | null) => { const why = live.host.bid(pid, a.id, n); if (why) ui.say(why) }
+  return <AuctionDock game={game} state={state} auction={{ ...a, ends }} me={null}
+    proxies={game.players.filter(p => !(p.id in phoned)).map(p => p.id)} onProxyBid={bid} onStop={() => live.host.cancelAuction()} />
 }
 
 function HostInbox({ live, game }: { live: HostLive; game: Game }) {
@@ -144,6 +180,19 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
   const ui = useUI()
   const { game, state, entries } = snap
   const last = entries.at(-1)
+  const turns = entries.filter(e => e.ops.some(o => o.op === 'turn')).length
+  // the host's override: one more landing after the roll's own, to fix a wrong tap. It lasts until the next entry.
+  const [extra, setExtra] = useState(-1)
+  const moving = !state.jailed[state.turn] && (state.moves > 0 || extra === entries.length)
+  const cardMove = !!last?.ops.some(o => o.op === 'moves')
+  // one column (tablets, phones): the board sits in the turn panel, right under "tap where it lands"
+  const narrow = useSyncExternalStore(onNarrow, () => narrowQuery.matches)
+  const board = (
+    <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell, landed: moving })}
+      reach={moving && !cardMove ? reachable(game, state, state.turn) : undefined}
+      hint={moving ? `Tap where ${game.players.find(p => p.id === state.turn)!.name} landed` : undefined}
+      stage={webgl ? <Suspense fallback={null}><Stage game={game} state={state} entries={entries} /></Suspense> : undefined} />
+  )
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -151,7 +200,6 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
       if (e.metaKey || e.ctrlKey || e.altKey || t.closest('input, textarea, select, dialog')) return
       if (e.key === 'n') ui.act('endTurn')
       else if (e.key === 'u') ui.undo()
-      else if (e.key === 'l') ui.open({ kind: 'landed' })
     }
     addEventListener('keydown', key)
     return () => removeEventListener('keydown', key)
@@ -176,12 +224,12 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
             <PlayerRail game={game} state={state} />
           </section>
           {ui.live?.kind === 'host' && <HostInbox live={ui.live} game={game} />}
-          <TurnPanel key={`${state.turn}:${entries.filter(e => e.ops.some(o => o.op === 'turn')).length}`} game={game} state={state} />
+          <TurnPanel key={`${state.turn}:${turns}`} game={game} state={state} board={narrow ? board : undefined} onOverride={() => { setExtra(entries.length); ui.say('Undo the wrong landing below, or tap the square to record another one') }} />
         </div>
-        <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell })}
-          stage={webgl ? <Suspense fallback={null}><Stage game={game} state={state} entries={entries} /></Suspense> : undefined} />
+        {!narrow && board}
       </main>
 
+      {ui.live?.kind === 'host' && <HostAuction live={ui.live} game={game} state={state} />}
       <footer className="ticker" aria-live="polite">
         <span className="eyebrow">Last entry</span>
         <span className="ticker-text">{last ? last.memo : 'The ledger is open. Nothing recorded yet.'}</span>

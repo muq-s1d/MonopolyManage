@@ -8,10 +8,9 @@ export type DealTab = 'trade' | 'pact' | 'loan' | 'pass'
 export type Screen = 'lobby' | 'setup' | 'table' | 'ledger' | 'editor' | 'end' | 'join' | 'guide'
 
 export type SheetSpec =
-  | { kind: 'landed' }
+  /** A square. `landed`: the current player is recording a landing there, so it offers the choices that fit. */
   | { kind: 'cell'; cell: number; landed?: boolean; opts?: RentOpts }
-  | { kind: 'card'; deck: 'chance' | 'chest' }
-  | { kind: 'nearest'; type: 'railroad' | 'utility' }
+  | { kind: 'card'; deck: 'chance' | 'chest'; cell: number }
   | { kind: 'portfolio'; player: string }
   | { kind: 'deals'; tab?: DealTab }
   | { kind: 'payment' }

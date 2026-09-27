@@ -1,4 +1,4 @@
-import type { Entry } from '../engine/types.ts'
+import type { Entry, Op } from '../engine/types.ts'
 import { prefs } from '../store.ts'
 
 // A tiny chiptune synth: NES style pulse and triangle voices, softened by a low pass filter
@@ -87,8 +87,14 @@ const SFX: Record<Sfx, () => Voice[]> = {
 }
 
 /** Which sound a ledger entry makes, read from its operations. */
+/** A landing's ops after the arrival: what happened on the square. With nothing there, the whole entry (passing Go). */
+export function moment(ops: Op[]) {
+  const i = ops.findIndex(o => o.op === 'at')
+  return i < 0 || i === ops.length - 1 ? ops : ops.slice(i + 1)
+}
+
 export function soundFor(e: Entry): Sfx {
-  const ops = e.ops
+  const ops = moment(e.ops)
   const has = (op: string) => ops.some(o => o.op === op)
   if (has('bankrupt')) return 'bankrupt'
   const pact = ops.find(o => o.op === 'pact')
@@ -113,6 +119,7 @@ export function soundFor(e: Entry): Sfx {
     return owns.length === 1 && cash.length === 1 && cash[0].op === 'transfer' && cash[0].to === 'bank' ? 'buy' : 'trade'
   }
   if (has('turn')) return 'turn'
+  if (has('moves')) return 'card'
   if (has('jailCard')) return ops.some(o => o.op === 'jailCard' && o.delta > 0) ? 'card' : 'free'
   const moves = ops.flatMap(o => (o.op === 'transfer' ? [o] : []))
   if (!moves.length) return 'tick'

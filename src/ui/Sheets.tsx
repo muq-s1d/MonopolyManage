@@ -1,13 +1,14 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import * as E from '../engine/engine.ts'
 import * as D from '../engine/deals.ts'
-import type { Board, Card, Cell, Game, Party, Player, State } from '../engine/types.ts'
+import type { Board, Card, Cell, Game, Party, State } from '../engine/types.ts'
 import { download, prefs, store, type Snap } from '../store.ts'
-import { shortName } from './BoardMap.tsx'
 import { useUI, type SheetSpec } from './ctx.ts'
 import { inkOn, Money, Pips, Seal, Sheet, Switch } from './kit.tsx'
 import { sfx } from './sound.ts'
 import DealsSheet from './Deals.tsx'
+import { STEP_PRESETS, StepPicker } from './Auction.tsx'
+import { landingChoices, nearest, passesGo, type Landing } from '../engine/actions.ts'
 
 type Props = { game: Game; state: State }
 const who = (g: Game, id: string) => g.players.find(p => p.id === id)!
@@ -16,51 +17,14 @@ const partyName = (g: Game, id: Party) => (id === 'bank' ? 'Bank' : id === 'pot'
 export default function Sheets({ spec, snap }: { spec: SheetSpec; snap: NonNullable<Snap> }) {
   const p = { game: snap.game, state: snap.state }
   switch (spec.kind) {
-    case 'landed': return <LandedPicker {...p} />
-    case 'cell': return <CellSheet {...p} cell={spec.cell} opts={spec.opts} />
-    case 'card': return <CardSheet {...p} deck={spec.deck} />
-    case 'nearest': return <NearestSheet {...p} type={spec.type} />
+    case 'cell': return <CellSheet {...p} cell={spec.cell} landed={spec.landed} opts={spec.opts} />
+    case 'card': return <CardSheet {...p} deck={spec.deck} cell={spec.cell} />
     case 'portfolio': return <Portfolio {...p} pid={spec.player} />
     case 'deals': return <DealsSheet {...p} tab={spec.tab} />
     case 'payment': return <PaymentSheet {...p} />
     case 'bankrupt': return <BankruptSheet {...p} pid={spec.player} creditor={spec.creditor} />
     case 'menu': return <MenuSheet {...p} />
   }
-}
-
-// ---------- landed picker ----------
-
-function LandedPicker({ game, state }: Props) {
-  const ui = useUI()
-  const [q, setQ] = useState('')
-  const b = game.board
-  const current = who(game, state.turn)
-  const hits = b.cells.map((c, i) => ({ c, i })).filter(({ c }) => c.name.toLowerCase().includes(q.trim().toLowerCase()))
-  return (
-    <Sheet eyebrow={`${current.name}'s move`} title="Where did they land?" onClose={ui.close}>
-      <label className="field">
-        <span>Search squares</span>
-        <input className="input" autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Boardwalk, Chance, Tax" />
-      </label>
-      <ul className="cell-list">
-        {hits.map(({ c, i }) => {
-          const owner = state.owner[i]
-          return (
-            <li key={i}>
-              <button className="cell-row" onClick={() => ui.open({ kind: 'cell', cell: i })}>
-                <i className="swatch" style={{ background: b.groups.find(g => g.id === c.group)?.color ?? 'transparent' }} />
-                <span>{c.name}</span>
-                <span className="muted small">
-                  {owner ? `${who(game, owner).name}${state.mortgaged[i] ? ', mortgaged' : ''}` : c.price ? E.money(b, c.price) : c.kind === 'tax' ? E.money(b, c.amount ?? 0) : ''}
-                </span>
-              </button>
-            </li>
-          )
-        })}
-        {hits.length === 0 && <li className="muted">No square matches that search.</li>}
-      </ul>
-    </Sheet>
-  )
 }
 
 // ---------- deed card ----------
@@ -104,9 +68,9 @@ export function Deed({ board, cell, c }: { board: Board; cell: number; c: Cell }
   )
 }
 
-// ---------- a square: deed plus the right actions for the current player ----------
+// ---------- a square: its deed, and when landing there, exactly the choices that fit it ----------
 
-function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opts?: E.RentOpts }) {
+function CellSheet({ game, state, cell, landed, opts = {} }: Props & { cell: number; landed?: boolean; opts?: E.RentOpts }) {
   const ui = useUI()
   const b = game.board, c = b.cells[cell], m = (n: number) => E.money(b, n)
   const p = who(game, state.turn)
@@ -114,53 +78,45 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
   const held = owner ? E.pactFor(game, state, cell) : null
   const [dice, setDice] = useState<number | ''>('')
   const [auction, setAuction] = useState(false)
-  const [bidder, setBidder] = useState(p.id)
-  const [bid, setBid] = useState<number | ''>('')
   const done = async (ok: Promise<boolean>) => (await ok) && ui.close()
+  const record = (how: Landing) => done(ui.act('land', p.id, cell, how))
   const ownable = c.kind === 'property' || c.kind === 'railroad' || c.kind === 'utility'
+  const choices = landingChoices(game, state, p.id, cell)
+  const go = landed && passesGo(state, p.id, cell) && cell !== 0
+  const raise = (short: number, creditor?: string) => short > 0 && (
+    <>
+      <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>
+      <button className="ghost danger" onClick={() => ui.open({ kind: 'bankrupt', player: p.id, creditor })}>Declare bankruptcy</button>
+    </>
+  )
+  const ok = (text: string) => <div className="btn-row"><button className="plaque big" onClick={() => record({ do: 'none' })}>{text}</button></div>
 
   let action: ReactNode = null
-  if (ownable && !owner) {
-    const short = c.price! - state.cash[p.id]
-    action = (
+  if (!landed) {
+    action = null
+  } else if (choices.includes('buy')) {
+    const short = c.price! - state.cash[p.id] - (go ? b.salary : 0)
+    action = auction ? <AuctionStart game={game} state={state} cell={cell} onBack={() => setAuction(false)} /> : (
       <>
-        <p>Unowned. {p.name} may buy it for <strong className="num">{m(c.price!)}</strong>.</p>
+        <p>Nobody owns it yet.</p>
         {short > 0 && <p className="danger">{p.name} is {m(short)} short. Raise money by selling buildings or mortgaging.</p>}
         <div className="btn-row">
-          <button className="plaque big" disabled={short > 0} onClick={() => done(ui.act('buy', p.id, cell))}>Buy for {m(c.price!)}</button>
+          <button className="plaque big" disabled={short > 0} onClick={() => record({ do: 'buy' })}>Buy for {m(c.price!)}</button>
           {short > 0 && <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>}
-          {game.rules.auctions && <button className="ghost" aria-expanded={auction} onClick={() => setAuction(!auction)}>Auction it</button>}
-          <button className="ghost" onClick={ui.close}>Leave it</button>
+          {game.rules.auctions && <button className="ghost" onClick={() => setAuction(true)}>Auction it</button>}
+          {!game.rules.auctions && <button className="ghost" onClick={() => record({ do: 'none' })}>Leave it</button>}
         </div>
-        {auction && (
-          <form className="auction" onSubmit={e => { e.preventDefault(); if (bid) done(ui.act('buy', bidder, cell, bid)) }}>
-            <p className="muted small">Bid out loud around the table, then record the winner. Bids can start at any amount.</p>
-            <div className="two-col">
-              <label className="field"><span>Winner</span>
-                <select className="input" value={bidder} onChange={e => setBidder(e.target.value)}>
-                  {E.active(game, state).map(x => <option key={x.id} value={x.id}>{x.name} ({m(state.cash[x.id])})</option>)}
-                </select>
-              </label>
-              <label className="field"><span>Winning bid</span>
-                <input className="input num" type="number" inputMode="numeric" min={1} value={bid} onChange={e => setBid(e.target.value === '' ? '' : Math.max(0, Math.floor(+e.target.value)))} />
-              </label>
-            </div>
-            <button className="plaque" type="submit" disabled={!bid}>Sell to the winner</button>
-          </form>
-        )}
       </>
     )
-  } else if (ownable && owner === p.id) {
-    action = <p>{p.name} owns this, so no rent is due.</p>
-  } else if (ownable && owner) {
+  } else if (choices.includes('rent')) {
     const needDice = c.kind === 'utility'
     const r = E.rent(game, state, cell, { ...opts, dice: dice || undefined })
     const split = E.rentSplit(game, state, p.id, cell, r.amount)
     const payees = typeof split === 'string' ? [] : Object.entries(split).filter(([, v]) => v > 0)
     const pact = E.pactFor(game, state, cell)
     const pass = D.passFor(game, state, p.id, cell)
-    const short = r.amount - state.cash[p.id]
-    action = typeof split === 'string' ? <p>{split}.</p> : (
+    const short = r.amount - state.cash[p.id] - (go ? b.salary : 0)
+    action = (
       <>
         {needDice && (
           <label className="field dice-field">
@@ -171,54 +127,51 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
         )}
         {(!needDice || dice) ? (
           <>
-            <p className="rent-line"><span>{p.name} owes {payees.length > 1 && pact ? `the ${E.pactName(b, pact)}` : who(game, payees[0]?.[0] ?? owner).name}</span> <strong className="num big-num">{m(r.amount)}</strong></p>
+            <p className="rent-line"><span>{p.name} owes {payees.length > 1 && pact ? `the ${E.pactName(b, pact)}` : who(game, payees[0]?.[0] ?? owner!).name}</span> <strong className="num big-num">{m(r.amount)}</strong></p>
             <p className="muted">{r.why}.</p>
             {payees.length > 1 && <p className="muted">Split by shares: {payees.map(([id, v]) => `${who(game, id).name} ${m(v)}`).join(', ')}.</p>}
             {pass && <p>{p.name} holds a free rent pass here: {pass.landings} {pass.landings === 1 ? 'landing' : 'landings'} left.</p>}
             {short > 0 && !pass && <p className="danger">{p.name} is {m(short)} short.</p>}
             <div className="btn-row">
-              {pass && <button className="plaque big" onClick={() => done(ui.act('usePass', pass.id, cell))}>Use a free landing</button>}
-              <button className={pass ? 'ghost' : 'plaque big'} disabled={r.amount === 0 || short > 0} onClick={() => done(ui.act('payRent', p.id, cell, { ...opts, dice: dice || undefined }))}>{pass ? 'Pay anyway' : `Pay ${m(r.amount)} rent`}</button>
-              {short > 0 && <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>}
-              {short > 0 && <button className="ghost danger" onClick={() => ui.open({ kind: 'bankrupt', player: p.id, creditor: owner })}>Declare bankruptcy</button>}
+              {pass && <button className="plaque big" onClick={() => record({ do: 'pass', id: pass.id })}>Use a free landing</button>}
+              <button className={pass ? 'ghost' : 'plaque big'} disabled={r.amount === 0 || short > 0} onClick={() => record({ do: 'rent', opts: { ...opts, dice: dice || undefined } })}>{pass ? 'Pay anyway' : `Pay ${m(r.amount)} rent`}</button>
+              {!pass && raise(short, owner!)}
             </div>
           </>
-        ) : <p className="muted">Enter the dice total to work out the rent.</p>}
+        ) : null}
       </>
     )
   } else if (c.kind === 'tax') {
-    const short = (c.amount ?? 0) - state.cash[p.id]
+    const short = (c.amount ?? 0) - state.cash[p.id] - (go ? b.salary : 0)
     action = (
       <>
         <p>{p.name} pays <strong className="num">{m(c.amount ?? 0)}</strong>{game.rules.freeParking ? ' into the Free Parking pot' : ' to the bank'}.</p>
         {short > 0 && <p className="danger">{p.name} is {m(short)} short.</p>}
         <div className="btn-row">
-          <button className="plaque big" disabled={short > 0} onClick={() => done(ui.act('payTax', p.id, cell))}>Pay {m(c.amount ?? 0)}</button>
-          {short > 0 && <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Raise money</button>}
-          {short > 0 && <button className="ghost danger" onClick={() => ui.open({ kind: 'bankrupt', player: p.id, creditor: 'bank' })}>Declare bankruptcy</button>}
+          <button className="plaque big" disabled={short > 0} onClick={() => record({ do: 'tax' })}>Pay {m(c.amount ?? 0)}</button>
+          {raise(short, 'bank')}
         </div>
       </>
     )
   } else if (c.kind === 'chance' || c.kind === 'chest') {
-    action = (
-      <div className="btn-row">
-        <button className="plaque big" onClick={() => ui.open({ kind: 'card', deck: c.kind as 'chance' | 'chest' })}>Pick the card {p.name} drew</button>
-      </div>
-    )
+    action = <div className="btn-row"><button className="plaque big" onClick={() => ui.open({ kind: 'card', deck: c.kind as 'chance' | 'chest', cell })}>Pick the card {p.name} drew</button></div>
   } else if (c.kind === 'gotojail') {
-    action = <div className="btn-row"><button className="plaque big danger" onClick={() => done(ui.act('goToJail', p.id))}>Send {p.name} to jail</button></div>
-  } else if (c.kind === 'parking') {
-    action = game.rules.freeParking && state.pot > 0
-      ? <div className="btn-row"><button className="plaque big" onClick={() => done(ui.act('collectPot', p.id))}>Collect the {m(state.pot)} pot</button></div>
-      : <p className="muted">{game.rules.freeParking ? 'The pot is empty. Nothing happens.' : 'A free rest. Nothing happens.'}</p>
+    action = <div className="btn-row"><button className="plaque big danger" onClick={() => record({ do: 'jail' })}>Send {p.name} to jail</button></div>
+  } else if (choices.includes('pot')) {
+    action = <div className="btn-row"><button className="plaque big" onClick={() => record({ do: 'pot' })}>Collect the {m(state.pot)} pot</button></div>
   } else if (c.kind === 'go') {
-    action = <div className="btn-row"><button className="plaque big" onClick={() => done(ui.act('passGo', p.id, true))}>Collect {m(b.salary * (game.rules.doubleGo ? 2 : 1))}{game.rules.doubleGo ? ', double for landing on it' : ''}</button></div>
-  } else if (c.kind === 'jail') {
-    action = <p className="muted">Just visiting. Nothing happens.</p>
+    action = ok(`Collect ${m(b.salary * (game.rules.doubleGo ? 2 : 1))}${game.rules.doubleGo ? ', double for landing on it' : ''}`)
+  } else if (ownable && owner === p.id) {
+    action = <><p>{p.name} owns this, so nothing is owed.</p>{ok('Done')}</>
+  } else if (ownable) {
+    const split = E.rentSplit(game, state, p.id, cell, 1)
+    action = <><p>{typeof split === 'string' ? split : E.rent(game, state, cell).why}. No rent is due.</p>{ok('Done')}</>
+  } else {
+    action = <><p className="muted">{c.kind === 'jail' ? 'Just visiting. Nothing happens.' : game.rules.freeParking ? 'The pot is empty. Nothing happens.' : 'A free rest. Nothing happens.'}</p>{ok('Done')}</>
   }
 
   return (
-    <Sheet eyebrow={opts.railroadMultiplier ? 'Card: double rent' : opts.utilityMax ? 'Card: ten times the dice' : `${p.name} landed on`} title={c.name} onClose={ui.close} wide={ownable}>
+    <Sheet eyebrow={opts.railroadMultiplier ? 'Card: double rent' : opts.utilityMax ? 'Card: ten times the dice' : landed ? `${p.name} landed on` : 'Square'} title={c.name} onClose={ui.close} wide={ownable}>
       <div className={ownable ? 'cell-sheet' : ''}>
         {ownable && (
           <div>
@@ -235,11 +188,13 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
           </div>
         )}
         <div className="cell-actions">
-          <p className="eyebrow">For {p.name}</p>
+          {landed && <p className="eyebrow">For {p.name}</p>}
+          {go && <p className="go-line">Passed Go: <strong className="num">+{m(b.salary)}</strong></p>}
           {action}
+          {!landed && !ownable && <p className="muted">{game.players.filter(x => state.pos[x.id] === cell && !state.bankrupt[x.id]).map(x => x.name).join(', ') || 'Nobody'} {game.players.filter(x => state.pos[x.id] === cell).length > 1 ? 'are' : 'is'} here.</p>}
           {ownable && owner && (
             <>
-              <hr className="rule" />
+              {landed && <hr className="rule" />}
               <p className="eyebrow">Owner tools</p>
               <DeedRow game={game} state={state} cell={cell} />
             </>
@@ -247,6 +202,54 @@ function CellSheet({ game, state, cell, opts = {} }: Props & { cell: number; opt
         </div>
       </div>
     </Sheet>
+  )
+}
+
+/** Leaving an unowned deed for auction. In a session every phone bids live; on one screen, bids are called out loud. */
+function AuctionStart({ game, state, cell, onBack }: Props & { cell: number; onBack: () => void }) {
+  const ui = useUI()
+  const b = game.board, p = who(game, state.turn), m = (n: number) => E.money(b, n)
+  const [steps, setSteps] = useState(STEP_PRESETS[1])
+  const [bidder, setBidder] = useState(p.id)
+  const [bid, setBid] = useState<number | ''>('')
+  // the landing is recorded first (left for auction), unless it already was
+  const leave = async () => state.pos[p.id] === cell && state.moves === 0 ? true : ui.act('land', p.id, cell, { do: 'none' })
+  const live = ui.live
+  const start = async () => {
+    if (!live || !(await leave())) return
+    const why = live.kind === 'phone' ? (await live.client.startAuction(cell, steps)).error : live.host.startAuction(p.id, cell, steps)
+    if (why) ui.say(why)
+    else ui.close()
+  }
+  if (live) return (
+    <div className="auction-start">
+      <p>Everyone bids on their own phone. The top bid wins.</p>
+      <StepPicker steps={steps} onChange={setSteps} />
+      <div className="btn-row">
+        <button className="plaque big" onClick={start}>Start the auction</button>
+        <button className="ghost" onClick={onBack}>Back</button>
+      </div>
+    </div>
+  )
+  return (
+    <form className="auction" onSubmit={async e => { e.preventDefault(); if (bid && (await leave())) { if (await ui.act('buy', bidder, cell, bid)) ui.close() } }}>
+      <p className="muted small">Bid out loud, then record the winner.</p>
+      <div className="two-col">
+        <label className="field"><span>Winner</span>
+          <select className="input" value={bidder} onChange={e => setBidder(e.target.value)}>
+            {E.active(game, state).map(x => <option key={x.id} value={x.id}>{x.name} ({m(state.cash[x.id])})</option>)}
+          </select>
+        </label>
+        <label className="field"><span>Winning bid</span>
+          <input className="input num" type="number" inputMode="numeric" min={1} value={bid} onChange={e => setBid(e.target.value === '' ? '' : Math.max(0, Math.floor(+e.target.value)))} />
+        </label>
+      </div>
+      <div className="btn-row">
+        <button className="plaque" type="submit" disabled={!bid}>Sell to the winner</button>
+        <button className="ghost" type="button" onClick={async () => { if (await leave()) ui.close() }}>Nobody wants it</button>
+        <button className="ghost" type="button" onClick={onBack}>Back</button>
+      </div>
+    </form>
   )
 }
 
@@ -264,70 +267,31 @@ export function effectText(b: Board, f: Card['effect']) {
     case 'jailCard': return 'Keep this card until needed'
     case 'advance': return `Move to ${b.cells[f.cell]?.name ?? 'a square'}`
     case 'nearest': return `Move to the nearest ${f.kind}`
-    case 'move': return 'Move, then pick where they landed'
+    case 'move': return 'Move, then tap where the piece lands'
   }
 }
 
-function CardSheet({ game, state, deck }: Props & { deck: 'chance' | 'chest' }) {
+function CardSheet({ game, state, deck, cell }: Props & { deck: 'chance' | 'chest'; cell: number }) {
   const ui = useUI()
   const b = game.board, p = who(game, state.turn)
-  const [advance, setAdvance] = useState<number | null>(null)
-  const cards = b[deck]
-
   const pick = async (card: Card) => {
     const f = card.effect
     if (f.type === 'advance' || f.type === 'nearest' || f.type === 'move') sfx('card')
-    if (f.type === 'advance') {
-      if (f.cell === 0) { if (await ui.act('passGo', p.id, true)) ui.close() }
-      else setAdvance(f.cell)
-    } else if (f.type === 'nearest') ui.open({ kind: 'nearest', type: f.kind })
-    else if (f.type === 'move') ui.open({ kind: 'landed' })
-    else if (await ui.act('drawCard', p.id, card)) ui.close()
+    if (!(await ui.act('land', p.id, cell, { do: 'card', card }))) return
+    // a movement card grants one more landing: open the square it leads to, or let the player tap it
+    if (f.type === 'advance') ui.open({ kind: 'cell', cell: f.cell, landed: true })
+    else if (f.type === 'nearest') ui.open({ kind: 'cell', cell: nearest(game, cell, f.kind), landed: true, opts: f.kind === 'railroad' ? { railroadMultiplier: 2 } : { utilityMax: true } })
+    else if (f.type === 'move') { ui.close(); ui.say(`Move ${p.name}'s piece, then tap the square it lands on`) }
+    else ui.close()
   }
-
-  if (advance !== null) {
-    return (
-      <Sheet eyebrow={`${p.name} advances`} title={`To ${b.cells[advance].name}`} onClose={ui.close}>
-        <p>Did {p.name} pass Go on the way there?</p>
-        <div className="btn-row">
-          <button className="plaque big" onClick={async () => { if (await ui.act('passGo', p.id)) ui.open({ kind: 'cell', cell: advance }) }}>
-            Yes, collect {E.money(b, b.salary)}
-          </button>
-          <button className="ghost" onClick={() => ui.open({ kind: 'cell', cell: advance })}>No</button>
-        </div>
-      </Sheet>
-    )
-  }
-
   return (
     <Sheet eyebrow={`${p.name} drew`} title={deck === 'chance' ? 'Chance' : 'Community Chest'} onClose={ui.close}>
       <ul className="card-list">
-        {cards.map((card, i) => (
+        {b[deck].map((card, i) => (
           <li key={i}>
             <button className="card-row" onClick={() => pick(card)}>
               <strong>{E.cardTitle(b, card)}</strong>
               <span className="muted small">{effectText(b, card.effect)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Sheet>
-  )
-}
-
-function NearestSheet({ game, state, type }: Props & { type: 'railroad' | 'utility' }) {
-  const ui = useUI()
-  const b = game.board, p = who(game, state.turn)
-  const cells = b.cells.flatMap((c, i) => (c.kind === type ? [i] : []))
-  return (
-    <Sheet eyebrow={`${p.name} advances`} title={`Nearest ${type}`} onClose={ui.close}>
-      <p className="muted">Count forward from where {p.name} stands on the physical board. If they pass Go, record it with Passed Go afterwards.</p>
-      <ul className="cell-list">
-        {cells.map(i => (
-          <li key={i}>
-            <button className="cell-row" onClick={() => ui.open({ kind: 'cell', cell: i, opts: type === 'railroad' ? { railroadMultiplier: 2 } : { utilityMax: true } })}>
-              <span>{b.cells[i].name}</span>
-              <span className="muted small">{state.owner[i] ? `Owned by ${who(game, state.owner[i]!).name}` : 'Unowned'}</span>
             </button>
           </li>
         ))}
@@ -400,10 +364,10 @@ function Portfolio({ game, state, pid }: Props & { pid: string }) {
         </>
       )}>
       <dl className="worth">
-        <div><dt>Cash</dt><dd><Money value={w.cash} cur={b.currency} /></dd><p className="muted small">Money in hand right now.</p></div>
-        <div><dt>Could raise</dt><dd className="num">{E.money(b, w.raisable)}</dd><p className="muted small">Cash plus what the bank pays for every building sold and every deed mortgaged.</p></div>
-        <div><dt>Net worth</dt><dd className="num">{E.money(b, w.total)}</dd><p className="muted small">Cash, deeds at printed price (half if mortgaged), buildings at cost (by share in a pact), plus loans owed to you minus loans you owe. Final standings use this.</p></div>
-        <div><dt>Jail cards</dt><dd className="num">{state.jailCards[pid]}</dd><p className="muted small">Get out of jail free cards held.</p></div>
+        <div><dt>Cash</dt><dd><Money value={w.cash} cur={b.currency} /></dd></div>
+        <div><dt>Could raise</dt><dd className="num">{E.money(b, w.raisable)}</dd><p className="muted small">Selling every building and mortgaging every deed.</p></div>
+        <div><dt>Net worth</dt><dd className="num">{E.money(b, w.total)}</dd></div>
+        <div><dt>Jail cards</dt><dd className="num">{state.jailCards[pid]}</dd></div>
       </dl>
       <hr className="rule" />
       {sorted.length === 0 ? <p className="muted">{p.name} owns no deeds yet.</p> : sorted.map(i => <DeedRow key={i} game={game} state={state} cell={i} />)}
@@ -453,7 +417,6 @@ function PaymentSheet({ game, state }: Props) {
   return (
     <Sheet eyebrow="Anything else" title="Other payment" onClose={ui.close}
       foot={<button className="plaque big" disabled={!r || E.isErr(r)} onClick={async () => { if (amount && await ui.act('transfer', from, to, amount, note.trim())) ui.close() }}>Record payment</button>}>
-      <p className="muted">For house rules, deals and anything the other buttons do not cover.</p>
       <div className="two-col">
         <label className="field"><span>From</span>
           <select className="input" value={from} onChange={e => setFrom(e.target.value)}>
@@ -509,7 +472,6 @@ function BankruptSheet({ game, state, pid, creditor }: Props & { pid: string; cr
       <p className="muted">{to === 'bank'
         ? 'Buildings are sold to the bank, the cash goes to the bank, and every deed returns to the board unowned and unmortgaged.'
         : `Buildings are sold to the bank at half price. ${partyName(game, to)} receives all the cash, every deed as it stands and any jail cards.`}</p>
-      <p className="muted small">This can be undone from the ledger like any other entry.</p>
       </div>
     </Sheet>
   )
@@ -524,8 +486,8 @@ function MenuSheet({ game }: Props) {
   const [scenes, setScenes] = useState(prefs.get().scenes ?? !!ui.live)
   return (
     <Sheet eyebrow="The back office" title="Menu" onClose={ui.close}>
-      <Switch label="Sound effects" help="Arcade chimes for buying, rent, building, jail, cards and more." checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v); if (v) sfx('coin') }} />
-      <Switch label="Cartoon scenes" help="A short animation at the top of the screen for every notable moment. On by default in sessions." checked={scenes} onChange={v => { prefs.set({ scenes: v }); setScenes(v) }} />
+      <Switch label="Sound effects" checked={sound} onChange={v => { prefs.set({ sound: v }); setSound(v); if (v) sfx('coin') }} />
+      <Switch label="Cartoon scenes" checked={scenes} onChange={v => { prefs.set({ scenes: v }); setScenes(v) }} />
       <div className="menu-list">
         <button className="ghost" onClick={() => ui.go('end')}>Standings and end of game</button>
         <button className="ghost" onClick={() => ui.go('ledger')}>Open the ledger</button>
@@ -547,7 +509,7 @@ function MenuSheet({ game }: Props) {
             </div>
           )}
       </div>
-      <p className="muted small">Keyboard: N for next player, U to undo, L for landed on.</p>
+      <p className="muted small">Keys: N ends the turn, U undoes.</p>
     </Sheet>
   )
 }

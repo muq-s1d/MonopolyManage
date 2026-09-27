@@ -20,12 +20,24 @@ export const shortName = (n: string) =>
     .replace(/ Railroad$/, ' RR').replace(/ Station$/, ' Stn').replace('Community Chest', 'Chest')
 
 // Soft hyphen inside long words, so tiny cells break them cleanly (hyphens: auto needs a dictionary many browsers lack).
-const breakable = (n: string) => n.replace(/\p{L}{10,}/gu, w => `${w.slice(0, Math.ceil(w.length / 2))}\u00AD${w.slice(Math.ceil(w.length / 2))}`)
+const breakable = (n: string) => n.replace(/\p{L}{8,}/gu, w => `${w.slice(0, Math.ceil(w.length / 2))}\u00AD${w.slice(Math.ceil(w.length / 2))}`)
 
 const side = (i: number) => (i < 10 ? 'b' : i < 20 ? 'l' : i < 30 ? 't' : 'r')
 
-function BoardMap({ game, state, onPick, highlight, stage }: {
+/** The squares a roll of 2 to 12 reaches from where this player stands, with the dice total for each. */
+export function reachable(game: Game, state: State, pid: string): Record<number, number> {
+  const n = game.board.cells.length, out: Record<number, number> = {}
+  for (let d = 2; d <= 12; d++) out[(state.pos[pid] + d) % n] = d
+  return out
+}
+
+/**
+ * The board, one button per square, with every player's token on the square they stand on.
+ * `reach`: squares to light up for the landing being recorded, with the dice total that gets there.
+ */
+function BoardMap({ game, state, onPick, highlight, stage, reach, hint }: {
   game: Game; state: State; onPick: (cell: number) => void; highlight?: number; stage?: ReactNode
+  reach?: Record<number, number>; hint?: string
 }) {
   const b = game.board
   const color = (id: string | null) => game.players.find(p => p.id === id)?.color
@@ -38,6 +50,8 @@ function BoardMap({ game, state, onPick, highlight, stage }: {
         const oc = color(owner)
         const ownerName = game.players.find(p => p.id === owner)?.name
         const pact = owner ? pactFor(game, state, i) : null
+        const here = game.players.filter(p => !state.bankrupt[p.id] && (state.pos?.[p.id] ?? 0) === i)
+        const dice = reach?.[i]
         const label = [
           c.name,
           c.price ? `price ${money(b, c.price)}` : '',
@@ -45,30 +59,33 @@ function BoardMap({ game, state, onPick, highlight, stage }: {
           pact ? `shared in the ${pactName(b, pact)}` : '',
           state.mortgaged[i] ? 'mortgaged' : '',
           state.level[i] === 5 ? 'hotel' : state.level[i] ? `${state.level[i]} houses` : '',
+          here.length ? `${here.map(p => p.name).join(' and ')} ${here.length === 1 ? 'is' : 'are'} here` : '',
+          dice ? `a roll of ${dice} lands here` : '',
         ].filter(Boolean).join(', ')
         return (
-          <button key={i} className={`cell cell-${c.kind} side-${side(i)}${i % 10 === 0 ? ' corner' : ''}${state.mortgaged[i] ? ' mortgaged' : ''}${pact ? ' pooled' : ''}${highlight === i ? ' hl' : ''}`}
+          <button key={i} className={`cell cell-${c.kind} side-${side(i)}${i % 10 === 0 ? ' corner' : ''}${state.mortgaged[i] ? ' mortgaged' : ''}${pact ? ' pooled' : ''}${highlight === i ? ' hl' : ''}${dice ? ' reach' : ''}${reach && !dice ? ' far' : ''}`}
             style={{ gridRow: row, gridColumn: col, ['--owner' as string]: oc ?? 'transparent', ['--band' as string]: groupColor(c.group) ?? 'transparent' }}
             onClick={() => onPick(i)} aria-label={label} title={label}>
             {c.kind === 'property' && <i className="band" />}
             <span className="cell-name">{breakable(shortName(c.name))}</span>
-            {c.price && !owner ? <span className="cell-price num">{money(b, c.price)}</span> : null}
+            {dice ? <span className="reach-dice num" aria-hidden="true">{dice}</span> : c.price && !owner ? <span className="cell-price num">{money(b, c.price)}</span> : null}
             {owner && <i className="owner-dot" />}
             <Pips level={state.level[i]} />
+            {here.length > 0 && <span className="tokens" aria-hidden="true">{here.map(p => <i key={p.id} className={p.id === state.turn ? 'now' : ''} style={{ background: p.color }} />)}</span>}
           </button>
         )
       })}
       <div className={`board-center${stage ? ' has-stage' : ''}`}>
         {stage}
-        <p className="display board-wordmark">{game.players.length ? 'The Counting House' : b.name}</p>
+        {!hint && <p className="display board-wordmark">{game.players.length ? 'The Counting House' : b.name}</p>}
         {game.players.length > 0 && <div className="board-stats">
           {game.rules.freeParking && (
-            <div><span className="eyebrow">Pot</span><strong className="num">{money(b, state.pot)}</strong><small className="muted">Paid by taxes and fines, won on Free Parking</small></div>
+            <div><span className="eyebrow">Pot</span><strong className="num">{money(b, state.pot)}</strong></div>
           )}
-          <div><span className="eyebrow">Houses left</span><strong className="num">{housesLeft(game, state)}</strong><small className="muted">of {b.houses} in the bank</small></div>
-          <div><span className="eyebrow">Hotels left</span><strong className="num">{hotelsLeft(game, state)}</strong><small className="muted">of {b.hotels} in the bank</small></div>
+          <div><span className="eyebrow">Houses left</span><strong className="num">{housesLeft(game, state)}</strong></div>
+          <div><span className="eyebrow">Hotels left</span><strong className="num">{hotelsLeft(game, state)}</strong></div>
         </div>}
-        {!stage && <p className="muted small">{game.players.length ? 'Tap a square to see its deed or record a landing' : 'Tap a square to edit it'}</p>}
+        {hint ? <p className="board-hint" role="status">{hint}</p> : !stage && !game.players.length && <p className="muted small">Tap a square to edit it</p>}
       </div>
     </div>
   )
