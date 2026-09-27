@@ -3,6 +3,18 @@ export type Release = { version: string; date: string; title: string; items: { l
 
 export const RELEASES: Release[] = [
   {
+    version: '1.3.0',
+    date: '2026-09-27',
+    title: 'Tap the board',
+    items: [
+      { lead: 'Tap where you land', text: 'The Landed on list is gone. Roll, move, then tap the square on the board. The numbers on it are dice totals, so a 7 means tap the 7.' },
+      { lead: 'One square per roll', text: 'Each roll records one landing, and a double gets another. A wrong tap is fixed with Undo, which the host approves.' },
+      { lead: 'Go pays itself', text: 'The app knows where every piece stands, so passing Go pays the salary with the landing. Every piece shows on the board.' },
+      { lead: 'Live auctions', text: 'Auction a deed and every phone gets bid buttons with a countdown. Whoever starts it picks the steps, like $10, $20 and $50. The host screen bids for players without a phone.' },
+      { lead: 'Easier to read', text: 'New fonts, no more shouty capitals, and far fewer explanations in the way.' },
+    ],
+  },
+  {
     version: '1.2.1',
     date: '2026-09-26',
     title: 'Deals with players who have no phone',

@@ -4,15 +4,17 @@
 
 A banker for physical Monopoly nights. The board, dice, pieces and cards stay on the table. One laptop or tablet sits beside it, the admin records what happened, and the app moves the money, tracks deeds, houses, jail and turns, and keeps a ledger that can be undone.
 
-No paper money to count, no rent tables to squint at, no banker mistakes. Or, new in 1.2, host a session and everyone plays from their own phone.
+No paper money to count, no rent tables to squint at, no banker mistakes. Host a session and everyone plays from their own phone.
 
 ![The table with four players](docs/table.jpg)
 
 ## What it does
 
 - **Setup:** 2 to 8 players, each with a colour, a banknote seal and a 3D creature wearing a 1930s accessory. The turn order is shuffled for you. Choose the Classic US or UK London board, or one you designed yourself.
-- **Landed on:** pick the square and the app offers only what applies. Buy it or send it to auction, pay rent (worked out for you, with the reason shown), pay tax, draw a card, go to jail, or collect the Free Parking pot.
-- **Cards:** pick the Chance or Community Chest card that was drawn and the app applies it: payments, birthday collections, repairs per house and hotel, advance to a square, nearest railroad or utility.
+- **Tap the board:** roll, move your piece, then tap the square it landed on. The squares a roll can reach show their dice total, so a 7 means tap the 7. The app offers only what fits that square: buy it or auction it, pay rent (worked out for you, with the reason shown), pay tax, draw a card, go to jail, or collect the Free Parking pot.
+- **One square per roll:** each roll records one landing, and a double gets another; the third double goes to jail. A wrong tap is fixed with Undo. The app knows where every piece stands, shows them on the board, and pays the Go salary when a move passes it.
+- **Live auctions:** in a session, auctioning a deed puts bid buttons and a countdown on every phone. Whoever starts it picks the steps, like $10, $20 and $50. The top bid wins when the clock runs out or everyone else is out, and the host screen bids for players without a phone.
+- **Cards:** pick the Chance or Community Chest card that was drawn and the app applies it: payments, birthday collections, repairs per house and hotel. Cards that move you open the square they lead to, nearest railroad or utility included.
 - **Build and mortgage:** even building, bank supply of houses and hotels, selling back at half price, mortgages with 10% interest.
 - **Trades:** deeds, cash and jail cards between two players, with a summary before you shake on it.
 - **Deals:** alliances that pool chosen colour sets (or railroads and utilities) so allies build together and split rent and costs by agreed shares, loans with interest and a due round, and free rent passes. A house rule you can switch off.
@@ -60,7 +62,7 @@ New in 1.2. Tap **Host a session** in the lobby. The host screen becomes the big
 - **Moments.** Every notable event plays a short animated strip on every device, and the big ones (buying, a hotel, jail, a pact, a trade, the jackpot, bankruptcy, the winner) get a short full screen scene you can tap to skip. They can be switched off in the menu, and they are available in the one-screen mode too, off by default.
 - **Reloads and dead batteries.** A phone keeps its seat, so a reload drops you straight back in. A new phone can take an existing seat once the host agrees. Reopening the host screen offers **Resume session** and the phones reconnect by themselves.
 
-![Riva's phone: her creature, her cash, and a trade from Otto waiting for her answer](docs/session-phone.jpg)
+![Otto's phone: his creature, his cash, and a trade from Riva waiting for his answer](docs/session-phone.jpg)
 
 ![The host screen during a session: phone marks on each player and the requests tray](docs/session-table.jpg)
 
