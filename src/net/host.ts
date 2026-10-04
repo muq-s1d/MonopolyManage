@@ -2,7 +2,7 @@ import { run, type ActionName, type ActionArgs } from '../engine/actions.ts'
 import { active, endTurn, isErr, name } from '../engine/engine.ts'
 import type { Entry, Err, Game, Player, State } from '../engine/types.ts'
 import { auctionProblem, gate } from './rules.ts'
-import { cleanSteps, type Auction, type Msg, type NewPlayer, type Offer } from './session.ts'
+import { cleanSteps, verify, type Auction, type Msg, type NewPlayer, type Offer, type Signed } from './session.ts'
 
 /** The ledger the host commits to: the saved store in the app, a plain object in tests. */
 export type Book = {
@@ -13,13 +13,13 @@ export type Book = {
   subscribe: (f: () => void) => () => void
 }
 
-/** What the host keeps across reloads: seat tokens and which of them may approve. */
-export type Seats = { seats: Record<string, string>; admins: string[] }
+/** What the host keeps across reloads: which device key holds which seat, the public keys, and which may approve. */
+export type Seats = { seats: Record<string, string>; keys: Record<string, JsonWebKey>; admins: string[]; secret?: string }
 
 type Opts = {
   colors: string[]
   accessories: number
-  /** Knowing this makes a phone the host's own phone, with the approval inbox. */
+  /** Knowing this makes a phone the host's own phone, with the approval inbox. It works once, then changes. */
   secret: string
   resume?: Seats
   onChange?: () => void
@@ -28,8 +28,25 @@ type Opts = {
 }
 
 const uid = () => crypto.randomUUID().slice(0, 8)
+const whole = (n: unknown, min = 0): n is number => Number.isSafeInteger(n) && (n as number) >= min
+/** Every number an entry writes is a whole amount and every square is on the board, whatever a phone sent as arguments. */
+function sane(g: Game, e: Entry) {
+  const sq = (c: unknown) => whole(c) && c < g.board.cells.length
+  return e.ops.every(o => {
+    switch (o.op) {
+      case 'transfer': return whole(o.amount)
+      case 'own': case 'mortgage': case 'at': return sq(o.cell)
+      case 'build': return sq(o.cell) && whole(o.level) && o.level <= 5
+      case 'jailCard': case 'moves': return whole(o.delta, -99)
+      default: return true
+    }
+  })
+}
 const exec = <K extends ActionName>(g: Game, s: State, name: K, args: ActionArgs<K>): Entry | Err => {
-  try { return run(g, s, name, ...args) } catch { return { error: 'That request did not make sense' } }
+  try {
+    const x = run(g, s, name, ...args)
+    return isErr(x) || sane(g, x) ? x : { error: 'That request did not make sense' }
+  } catch { return { error: 'That request did not make sense' } }
 }
 
 export type Host = ReturnType<typeof createHost>
@@ -38,8 +55,10 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
   let players: Player[] = []
   let started = !!o.resume && !!book.get()
   let offers: Offer[] = []
-  const seats: Record<string, string> = { ...o.resume?.seats } // token -> player id
+  const seats: Record<string, string> = { ...o.resume?.seats } // device key -> player id
+  const keys: Record<string, JsonWebKey> = { ...o.resume?.keys } // device key -> its public key
   const admins = new Set(o.resume?.admins)
+  let secret = o.resume?.secret ?? o.secret
   const devices: Record<string, string> = {} // player id -> device id, for the connection dots
   let sent: { game: Game; entries: Entry[] } | null = null
   const subs = new Set<() => void>()
@@ -48,10 +67,13 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
 
   const snap = () => (started ? book.get() : null)
   const roster = () => snap()?.game.players ?? players
+  // a broadcast carries 256 KB at most on the free plan, so a long ledger follows the hello in slices
+  const SLICE = 300
   const hello = () => {
-    const s = snap()
+    const s = snap(), all = s?.entries ?? []
     sent = s && { game: s.game, entries: s.entries }
-    send({ t: 'hello', game: s?.game ?? null, entries: s?.entries ?? [], players: roster(), seated: Object.values(seats), offers, auction: auctionView() })
+    send({ t: 'hello', game: s?.game ?? null, entries: all.slice(0, SLICE), players: roster(), seated: Object.values(seats), offers, auction: auctionView() })
+    for (let i = SLICE; i < all.length; i += SLICE) send({ t: 'sync', keep: i, add: all.slice(i, i + SLICE), n: Math.min(i + SLICE, all.length) })
   }
   const sendOffers = () => { send({ t: 'offers', offers }); changed() }
   const say = (pids: string[], text: string, error = false) => send({ t: 'say', pids, text, error })
@@ -137,41 +159,42 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
 
   function seat(m: Extract<Msg, { t: 'seat' }>) {
     const reply = (x: Omit<Extract<Msg, { t: 'done' }>, 't' | 'to' | 'id'>) => send({ t: 'done', to: m.me, id: m.id, ...x })
-    let token = m.token && seats[m.token] ? m.token : null
+    let pid: string | undefined = seats[m.key]
+    // the host's own phone presents the secret once; after that the QR code changes, so a copy of it is worthless
+    const host = !!secret && m.host === secret
     // after the start a new phone (a dead battery, a swapped device) can take an existing seat once the host agrees
-    if (!token && m.claim && started) {
+    if (!pid && m.claim && started) {
       const s = snap()!
       if (!s.game.players.some(p => p.id === m.claim)) return reply({ error: 'That seat is not at this table' })
-      if (m.host !== o.secret) {
-        offers = [...offers.filter(f => !(f.name === 'seat' && f.args[0] === m.me)), { id: uid(), from: m.claim, name: 'seat', args: [m.me, m.id], memo: `A new phone wants to take ${name(s.game, m.claim)}'s seat`, needs: [], accepted: [] }]
+      if (!host) {
+        offers = [...offers.filter(f => !(f.name === 'seat' && f.args[0] === m.me)), { id: uid(), from: m.claim, name: 'seat', args: [m.me, m.id, m.key, m.pub], memo: `A new phone wants to take ${name(s.game, m.claim)}'s seat`, needs: [], accepted: [] }]
         sendOffers()
         return reply({ pending: true })
       }
-      token = issue(m.claim)
+      pid = issue(m.claim, m.key, m.pub!)
     }
-    if (!token && m.player) {
+    if (!pid && m.player) {
       if (started) return reply({ error: 'This game has already started. Ask the host to seat you.' })
       const why = joinProblem(m.player)
       if (why) return reply({ error: why })
       const p: Player = { id: uid(), name: m.player.name.trim(), color: m.player.color, accessory: m.player.accessory, seed: Number.isInteger(m.player.seed) ? m.player.seed! : Math.floor(Math.random() * 1e9) }
       players = [...players, p]
-      token = crypto.randomUUID()
-      seats[token] = p.id
+      pid = issue(p.id, m.key, m.pub!)
     }
-    if (!token) return reply({ error: m.token ? 'That seat is gone. Join again.' : 'Pick a name, colour and creature first.' })
-    if (m.host === o.secret) admins.add(token)
-    devices[seats[token]] = m.me
-    reply({ ok: true, pid: seats[token], token, admin: admins.has(token) })
+    if (!pid) return reply({ error: m.player || m.claim ? 'That seat is gone. Join again.' : 'Pick a name, colour and creature first.' })
+    if (host) { admins.add(m.key); secret = crypto.randomUUID().slice(0, 12) }
+    devices[pid] = m.me
+    reply({ ok: true, pid, admin: admins.has(m.key) })
     hello()
     changed()
   }
 
-  /** A fresh token for a seat. Any older phone on that seat loses it. */
-  function issue(pid: string) {
-    for (const [t, p] of Object.entries(seats)) if (p === pid) { delete seats[t]; admins.delete(t) }
-    const t = crypto.randomUUID()
-    seats[t] = pid
-    return t
+  /** Gives a seat to a device key. Any older phone on that seat loses it. */
+  function issue(pid: string, key: string, pub: JsonWebKey) {
+    for (const [k, p] of Object.entries(seats)) if (p === pid) { delete seats[k]; delete keys[k]; admins.delete(k) }
+    seats[key] = pid
+    keys[key] = pub
+    return pid
   }
 
   function joinProblem(p: NewPlayer): string | null {
@@ -187,7 +210,7 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
 
   function request(m: Extract<Msg, { t: 'do' }>) {
     const reply = (x: { ok?: true; pending?: true; error?: string }) => send({ t: 'done', to: m.me, id: m.id, ...x })
-    const pid = seats[m.token], s = snap()
+    const pid = seats[m.key], s = snap()
     if (!pid) return reply({ error: 'This phone has no seat' })
     if (!s) return reply({ error: 'The game has not started yet' })
     const args = Array.isArray(m.args) ? m.args : []
@@ -200,7 +223,8 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
       book.commit(x)
       return reply({ ok: true })
     }
-    // a deal or a host-only request becomes an offer, previewed in the engine's own words
+    // a deal or a host-only request becomes an offer, previewed in the engine's own words; a few at a time per player
+    if (offers.filter(f => f.from === pid).length >= 5) return reply({ error: 'You have five requests waiting. Wait for answers first.' })
     const undo = m.name === 'undo'
     const preview = undo ? (s.entries.length ? { memo: `Undo: ${s.entries.at(-1)!.memo}` } : { error: 'Nothing to undo' }) : exec(s.game, s.state, m.name as ActionName, args as never)
     if (isErr(preview)) return reply(preview)
@@ -235,11 +259,11 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     sendOffers()
     const who = [x.from, ...x.needs]
     if (x.name === 'seat') {
-      const [device, request] = x.args as string[]
+      const [device, request, key, pub] = x.args as [string, string, string, JsonWebKey]
       if (!yes) { send({ t: 'done', to: device, id: request, error: 'The host said no' }); return null }
-      const token = issue(x.from)
+      issue(x.from, key, pub)
       devices[x.from] = device
-      send({ t: 'done', to: device, id: request, ok: true, pid: x.from, token, admin: false })
+      send({ t: 'done', to: device, id: request, ok: true, pid: x.from, admin: false })
       hello()
       changed()
       return null
@@ -259,28 +283,60 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     return null
   }
 
+  // ---------- every phone message is signed: check the key, the signature, and that it is not a replay ----------
+  const WINDOW = 5 * 60_000 // phone clocks drift a little; a copied message older than this is refused
+  const seen = new Map<string, number>(), lastHi = new Map<string, number>()
+  async function authentic(m: Signed<{ t: string; pub?: JsonWebKey }>) {
+    const now = Date.now()
+    if (typeof m.id !== 'string' || typeof m.sig !== 'string' || !(Math.abs(now - m.at) < WINDOW) || seen.has(m.id)) return false
+    // a known device must use its stored key; a new one introduces its own, which must match the name it signs with
+    const pub = keys[m.key] ?? (m.t === 'seat' ? m.pub : undefined)
+    if (!pub || pub.x !== m.key) return false
+    const { sig, ...body } = m
+    if (!(await verify(pub, JSON.stringify(body), sig))) return false
+    seen.set(m.id, now)
+    if (seen.size > 5000) for (const [id, t] of seen) if (now - t > WINDOW) seen.delete(id)
+    return true
+  }
+  function handle(m: Msg) {
+    switch (m.t) {
+      case 'seat': return seat(m)
+      case 'do': return request(m)
+      case 'answer': return seats[m.key] ? answer(seats[m.key], m.offer, m.yes) : undefined
+      case 'decide': return admins.has(m.key) ? void decide(m.offer, m.yes) : undefined
+      case 'bid': {
+        const pid = seats[m.key]
+        if (!pid) return
+        const why = bid(pid, m.auction, m.amount)
+        if (why) say([pid], why, true)
+      }
+    }
+  }
+  let queue = Promise.resolve() // one at a time, in the order they arrived
+
   return {
     receive(m: Msg) {
-      switch (m.t) {
-        case 'hi': return hello()
-        case 'seat': return seat(m)
-        case 'do': return request(m)
-        case 'answer': return seats[m.token] ? answer(seats[m.token], m.offer, m.yes) : undefined
-        case 'decide': return admins.has(m.token) ? void decide(m.offer, m.yes) : undefined
-        case 'bid': {
-          const pid = seats[m.token]
-          if (!pid) return
-          const why = bid(pid, m.auction, m.amount)
-          if (why) say([pid], why, true)
-          return
-        }
+      if (m.t === 'hi') {
+        // a hello carries the whole ledger: one per device every couple of seconds is plenty
+        const now = Date.now()
+        if (now - (lastHi.get(m.me) ?? 0) < 2000) return
+        lastHi.set(m.me, now)
+        return hello()
       }
+      if (m.t === 'seat' || m.t === 'do' || m.t === 'answer' || m.t === 'decide' || m.t === 'bid')
+        queue = queue.then(async () => {
+          if (await authentic(m)) return handle(m)
+          // a request from a key with no seat is told so; anything else unverified is dropped without a word
+          if (m.t === 'do' && !keys[m.key]) send({ t: 'done', to: m.me, id: m.id, error: 'This phone has no seat' })
+        })
     },
+    /** Settles once every message received so far is handled. */
+    idle: () => queue,
     /** Pre-start roster edits from the host screen: add a phoneless player, reorder, remove. */
     setPlayers(ps: Player[]) {
       players = ps
       const keep = new Set(ps.map(p => p.id))
-      for (const [t, pid] of Object.entries(seats)) if (!keep.has(pid)) delete seats[t]
+      for (const [k, pid] of Object.entries(seats)) if (!keep.has(pid)) { delete seats[k]; delete keys[k] }
       hello()
       changed()
     },
@@ -304,7 +360,9 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     get version() { return version },
     /** Player ids with a phone, and the device each last used. */
     get devices() { return Object.fromEntries(Object.values(seats).map(pid => [pid, devices[pid] ?? ''])) },
-    save: (): Seats => ({ seats: { ...seats }, admins: [...admins] }),
+    save: (): Seats => ({ seats: { ...seats }, keys: { ...keys }, admins: [...admins], secret }),
+    /** The current secret for the host's own phone; it changes once used. */
+    get secret() { return secret },
     subscribe(f: () => void) { subs.add(f); return () => { subs.delete(f) } },
     close() { off(); if (auction) clearTimeout(auction.timer); send({ t: 'bye' }) },
   }

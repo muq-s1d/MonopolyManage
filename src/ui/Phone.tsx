@@ -10,7 +10,7 @@ import { involves } from './Ledger.tsx'
 import Inbox from './Inbox.tsx'
 import { sfx } from './sound.ts'
 import { ThemeToggle, TurnPanel } from './Table.tsx'
-import BoardMap, { reachable } from './BoardMap.tsx'
+import BoardMap, { landing } from './BoardMap.tsx'
 import AuctionDock from './Auction.tsx'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
@@ -31,12 +31,11 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
   const over = active(game, state).length <= 1
 
   const myTurn = state.turn === me.id && !over && !state.bankrupt[me.id]
-  const moving = myTurn && !state.jailed[me.id] && state.moves > 0
-  const cardMove = !!entries.at(-1)?.ops.some(o => o.op === 'moves')
+  // only the squares this roll or card can reach record a landing; any other square just shows its deed
+  const due = landing(game, state, me.id)
   const board = (
-    <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell, landed: moving })}
-      reach={moving && !cardMove ? reachable(game, state, me.id) : undefined} highlight={state.pos[me.id]}
-      hint={moving ? (cardMove ? 'Tap where the card sends you' : 'Tap the number you rolled') : undefined} />
+    <BoardMap game={game} state={state} {...due} highlight={state.pos[me.id]}
+      onPick={cell => ui.open({ kind: 'cell', cell, landed: !!due.reach && cell in due.reach })} />
   )
 
   return (

@@ -90,7 +90,7 @@ export type Op =
   | { op: 'loan'; id: string; loan: Loan | null }
   | { op: 'immunity'; id: string; immunity: Immunity | null }
   | { op: 'at'; player: string; cell: number }   // a landing: uses up one of the turn's moves
-  | { op: 'moves'; delta: number; back?: true } // a card that moves the player grants one more landing; back: moving backwards
+  | { op: 'moves'; delta: number; back?: true; to?: number } // a card grants one more landing: to a square, or backwards
   | { op: 'doubles' }                           // another roll, so another landing
 
 export type Entry = { at: number; memo: string; ops: Op[] }
@@ -115,6 +115,7 @@ export type State = {
   moves: number                    // landings the current player may still record this turn
   doubles: number                  // doubles rolled this turn
   back: boolean                    // the next landing is a move backwards (a card), so it cannot pass Go
+  dest: number                     // the square a card sends the player to, or -1
 }
 
 export type Err = { error: string; short?: number; who?: string }

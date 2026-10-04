@@ -141,7 +141,6 @@ function Start({ open }: { open: (b: Board) => void }) {
 // ---------- the editor ----------
 
 export default function BoardEditor() {
-  const ui = useUI()
   const [board, setBoard] = useState<Board | null>(null)
   const [tab, setTab] = useState<Tab>('board')
   const [sel, setSel] = useState(1)

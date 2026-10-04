@@ -4,11 +4,10 @@ import { name } from '../engine/engine.ts'
 import type { Shown } from '../stage/Strip.tsx'
 import { prefs } from '../store.ts'
 import { eventFor } from './events.ts'
-import { Seal, webgl } from './kit.tsx'
+import { reducedMotion, Seal, webgl } from './kit.tsx'
 import { sfx } from './sound.ts'
 
 const Strip = lazy(() => import('../stage/Strip.tsx'))
-const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 /** Short titles for the full screen moments; the sentence goes underneath. */
 const TITLE: Partial<Record<string, string>> = {
   buy: 'Sold!', hotel: 'A hotel goes up', jail: 'Off to jail', pact: 'A pact is signed', trade: 'Shaken on',

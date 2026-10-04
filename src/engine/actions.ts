@@ -37,12 +37,22 @@ export function landingChoices(g: Game, s: State, pid: string, cell: number): La
 /** Moving forward onto Go or past it pays the salary. A move backwards (a card) never does. */
 export const passesGo = (s: State, pid: string, cell: number) => cell === 0 || (!s.back && cell < s.pos[pid])
 
-/** The first square of this kind ahead of a square, for the "nearest railroad" cards. */
-export function nearest(g: Game, from: number, kind: 'railroad' | 'utility') {
-  const n = g.board.cells.length
-  for (let k = 1; k <= n; k++) if (g.board.cells[(from + k) % n].kind === kind) return (from + k) % n
-  return -1
+/**
+ * Where the current landing can be, with a label for each square: the dice total that gets there,
+ * a negative step back for a card that moves backwards, or 0 for the one square a card names. Empty when no landing is due.
+ */
+export function reach(g: Game, s: State, pid: string): Record<number, number> {
+  if (s.turn !== pid || s.moves <= 0 || s.jailed[pid]) return {}
+  if (s.dest >= 0) return { [s.dest]: 0 }
+  const n = g.board.cells.length, at = s.pos[pid], out: Record<number, number> = {}
+  if (s.back) for (let k = 1; k <= 12; k++) out[(at - k + n) % n] = -k
+  else for (let d = 2; d <= 12; d++) out[(at + d) % n] = d
+  return out
 }
+
+/** The dice total a plain roll needed to reach this square, which is what a utility charges on. */
+export const rolled = (g: Game, s: State, pid: string, cell: number) =>
+  s.dest < 0 && !s.back ? (cell - s.pos[pid] + g.board.cells.length) % g.board.cells.length : undefined
 
 /** One landing, one ledger entry: moving there, passing Go on the way, and what the player did about the square. */
 export function land(g: Game, s: State, pid: string, cell: number, how: Landing = { do: 'none' }): Entry | Err {
@@ -58,6 +68,9 @@ export function land(g: Game, s: State, pid: string, cell: number, how: Landing 
     ops.push(...go.ops); memo.push(go.memo)
   }
   ops.push({ op: 'at', player: pid, cell })
+  E.apply(t, ops.at(-1)!, g) // the card drawn here moves on from this square
+  // a utility charges on the dice that brought the player here; a card's own throw is typed in
+  if (how.do === 'rent' && c.kind === 'utility' && !how.opts?.utilityMax) how = { ...how, opts: { ...how.opts, dice: rolled(g, s, pid, cell) ?? how.opts?.dice } }
   const x = settle(g, t, pid, cell, how)
   if (E.isErr(x)) return x
   if (x) { ops.push(...x.ops); memo.push(x.memo) }
@@ -104,7 +117,6 @@ export const ACTIONS = {
 
 export type ActionName = keyof typeof ACTIONS
 export type ActionArgs<K extends ActionName> = (typeof ACTIONS)[K] extends (g: Game, s: State, ...a: infer A) => unknown ? A : never
-export type Intent = { [K in ActionName]: { name: K; args: ActionArgs<K> } }[ActionName]
 
 export const run = <K extends ActionName>(g: Game, s: State, name: K, ...args: ActionArgs<K>): Entry | Err =>
   (ACTIONS[name] as unknown as (g: Game, s: State, ...a: ActionArgs<K>) => Entry | Err)(g, s, ...args)

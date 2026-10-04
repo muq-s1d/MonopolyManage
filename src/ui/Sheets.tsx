@@ -8,7 +8,7 @@ import { inkOn, Money, Pips, Seal, Sheet, Switch } from './kit.tsx'
 import { sfx } from './sound.ts'
 import DealsSheet from './Deals.tsx'
 import { STEP_PRESETS, StepPicker } from './Auction.tsx'
-import { landingChoices, nearest, passesGo, type Landing } from '../engine/actions.ts'
+import { landingChoices, passesGo, rolled, type Landing } from '../engine/actions.ts'
 
 type Props = { game: Game; state: State }
 const who = (g: Game, id: string) => g.players.find(p => p.id === id)!
@@ -76,7 +76,9 @@ function CellSheet({ game, state, cell, landed, opts = {} }: Props & { cell: num
   const p = who(game, state.turn)
   const owner = state.owner[cell]
   const held = owner ? E.pactFor(game, state, cell) : null
-  const [dice, setDice] = useState<number | ''>('')
+  // a utility charges on the roll that got here, which the board already knows; only a card's own throw is typed in
+  const roll = opts.utilityMax ? undefined : rolled(game, state, p.id, cell)
+  const [dice, setDice] = useState<number | ''>(roll ?? '')
   const [auction, setAuction] = useState(false)
   const done = async (ok: Promise<boolean>) => (await ok) && ui.close()
   const record = (how: Landing) => done(ui.act('land', p.id, cell, how))
@@ -93,7 +95,9 @@ function CellSheet({ game, state, cell, landed, opts = {} }: Props & { cell: num
 
   let action: ReactNode = null
   if (!landed) {
-    action = null
+    // the host screen may still record a landing here, to put right a piece that moved without being recorded
+    const host = ui.live?.kind !== 'phone' && !state.jailed[p.id] && !state.bankrupt[p.id]
+    action = host ? <div className="btn-row"><button className="ghost" onClick={() => ui.open({ kind: 'cell', cell, landed: true, opts })}>Record {p.name}&rsquo;s landing here anyway</button></div> : null
   } else if (choices.includes('buy')) {
     const short = c.price! - state.cash[p.id] - (go ? b.salary : 0)
     action = auction ? <AuctionStart game={game} state={state} cell={cell} onBack={() => setAuction(false)} /> : (
@@ -109,7 +113,7 @@ function CellSheet({ game, state, cell, landed, opts = {} }: Props & { cell: num
       </>
     )
   } else if (choices.includes('rent')) {
-    const needDice = c.kind === 'utility'
+    const needDice = c.kind === 'utility' && roll === undefined
     const r = E.rent(game, state, cell, { ...opts, dice: dice || undefined })
     const split = E.rentSplit(game, state, p.id, cell, r.amount)
     const payees = typeof split === 'string' ? [] : Object.entries(split).filter(([, v]) => v > 0)
@@ -280,7 +284,7 @@ function CardSheet({ game, state, deck, cell }: Props & { deck: 'chance' | 'ches
     if (!(await ui.act('land', p.id, cell, { do: 'card', card }))) return
     // a movement card grants one more landing: open the square it leads to, or let the player tap it
     if (f.type === 'advance') ui.open({ kind: 'cell', cell: f.cell, landed: true })
-    else if (f.type === 'nearest') ui.open({ kind: 'cell', cell: nearest(game, cell, f.kind), landed: true, opts: f.kind === 'railroad' ? { railroadMultiplier: 2 } : { utilityMax: true } })
+    else if (f.type === 'nearest') ui.open({ kind: 'cell', cell: E.nearest(game, cell, f.kind), landed: true, opts: f.kind === 'railroad' ? { railroadMultiplier: 2 } : { utilityMax: true } })
     else if (f.type === 'move') { ui.close(); ui.say(`Move ${p.name}'s piece, then tap the square it lands on`) }
     else ui.close()
   }

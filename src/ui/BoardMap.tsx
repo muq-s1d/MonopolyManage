@@ -2,6 +2,7 @@ import { memo, type ReactNode } from 'react'
 import { housesLeft, hotelsLeft, money, pactFor, pactName } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
 import { Pips } from './kit.tsx'
+import { reach } from '../engine/actions.ts'
 
 /** Grid row and column (1 based) of cell i on an 11 by 11 board, Go at the bottom right. */
 export function place(i: number): [number, number] {
@@ -24,16 +25,16 @@ const breakable = (n: string) => n.replace(/\p{L}{8,}/gu, w => `${w.slice(0, Mat
 
 const side = (i: number) => (i < 10 ? 'b' : i < 20 ? 'l' : i < 30 ? 't' : 'r')
 
-/** The squares a roll of 2 to 12 reaches from where this player stands, with the dice total for each. */
-export function reachable(game: Game, state: State, pid: string): Record<number, number> {
-  const n = game.board.cells.length, out: Record<number, number> = {}
-  for (let d = 2; d <= 12; d++) out[(state.pos[pid] + d) % n] = d
-  return out
+/** While a landing is due: the squares it can be (labelled as `reach` labels them) and what to tap. Empty otherwise. */
+export function landing(game: Game, state: State, pid: string): { reach?: Record<number, number>; hint?: string } {
+  const r = reach(game, state, pid)
+  if (!Object.keys(r).length) return {}
+  return { reach: r, hint: state.dest >= 0 ? 'Tap the star: the card sends you there' : state.back ? 'Tap the square the piece moved back to' : 'Tap the number you rolled' }
 }
 
 /**
  * The board, one button per square, with every player's token on the square they stand on.
- * `reach`: squares to light up for the landing being recorded, with the dice total that gets there.
+ * `reach`: squares to light up for the landing being recorded: a dice total, a step back (negative), or 0 for a card's square.
  */
 function BoardMap({ game, state, onPick, highlight, stage, reach, hint }: {
   game: Game; state: State; onPick: (cell: number) => void; highlight?: number; stage?: ReactNode
@@ -60,15 +61,15 @@ function BoardMap({ game, state, onPick, highlight, stage, reach, hint }: {
           state.mortgaged[i] ? 'mortgaged' : '',
           state.level[i] === 5 ? 'hotel' : state.level[i] ? `${state.level[i]} houses` : '',
           here.length ? `${here.map(p => p.name).join(' and ')} ${here.length === 1 ? 'is' : 'are'} here` : '',
-          dice ? `a roll of ${dice} lands here` : '',
+          dice === undefined ? '' : dice > 0 ? `a roll of ${dice} lands here` : dice < 0 ? `${-dice} back` : 'the card sends you here',
         ].filter(Boolean).join(', ')
         return (
-          <button key={i} className={`cell cell-${c.kind} side-${side(i)}${i % 10 === 0 ? ' corner' : ''}${state.mortgaged[i] ? ' mortgaged' : ''}${pact ? ' pooled' : ''}${highlight === i ? ' hl' : ''}${dice ? ' reach' : ''}${reach && !dice ? ' far' : ''}`}
+          <button key={i} className={`cell cell-${c.kind} side-${side(i)}${i % 10 === 0 ? ' corner' : ''}${state.mortgaged[i] ? ' mortgaged' : ''}${pact ? ' pooled' : ''}${highlight === i ? ' hl' : ''}${dice !== undefined ? ' reach' : ''}${reach && dice === undefined ? ' far' : ''}`}
             style={{ gridRow: row, gridColumn: col, ['--owner' as string]: oc ?? 'transparent', ['--band' as string]: groupColor(c.group) ?? 'transparent' }}
             onClick={() => onPick(i)} aria-label={label} title={label}>
             {c.kind === 'property' && <i className="band" />}
             <span className="cell-name">{breakable(shortName(c.name))}</span>
-            {dice ? <span className="reach-dice num" aria-hidden="true">{dice}</span> : c.price && !owner ? <span className="cell-price num">{money(b, c.price)}</span> : null}
+            {dice !== undefined ? <span className="reach-dice num" aria-hidden="true">{dice > 0 ? dice : dice < 0 ? `−${-dice}` : '★'}</span> : c.price && !owner ? <span className="cell-price num">{money(b, c.price)}</span> : null}
             {owner && <i className="owner-dot" />}
             <Pips level={state.level[i]} />
             {here.length > 0 && <span className="tokens" aria-hidden="true">{here.map(p => <i key={p.id} className={p.id === state.turn ? 'now' : ''} style={{ background: p.color }} />)}</span>}

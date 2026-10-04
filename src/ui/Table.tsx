@@ -3,9 +3,9 @@ import { BookOpen, CircleCheck, Dice5, Menu, Moon, Sun, Undo2 } from 'lucide-rea
 import { active, money, nextPlayer } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
 import { prefs, store, type Snap } from '../store.ts'
-import BoardMap, { reachable } from './BoardMap.tsx'
+import BoardMap, { landing } from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
-import { Money, PhoneMark, readable, Seal, webgl } from './kit.tsx'
+import { isDark, Money, PhoneMark, readable, Seal, webgl } from './kit.tsx'
 import Inbox from './Inbox.tsx'
 import type { HostLive } from '../net/live.ts'
 import { dueLoans } from '../engine/deals.ts'
@@ -16,10 +16,7 @@ const narrowQuery = matchMedia('(max-width: 980px)') // the one column layout in
 const onNarrow = (f: () => void) => { narrowQuery.addEventListener('change', f); return () => narrowQuery.removeEventListener('change', f) }
 
 export function ThemeToggle() {
-  const [dark, setDark] = useState(() => {
-    const t = document.documentElement.dataset.theme
-    return t ? t === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches
-  })
+  const [dark, setDark] = useState(isDark)
   const flip = () => {
     const theme = dark ? 'light' : 'dark'
     document.documentElement.dataset.theme = theme
@@ -67,11 +64,8 @@ function PlayerRail({ game, state }: { game: Game; state: State }) {
   )
 }
 
-/**
- * The current player's turn, one step at a time: tap where the roll landed, answer "was it a double?", pass the dice.
- * `onOverride`: the host screen may record another landing after the roll's one is used, to fix a wrong tap.
- */
-export function TurnPanel({ game, state, onOverride, board }: { game: Game; state: State; onOverride?: () => void; board?: ReactNode }) {
+/** The current player's turn, one step at a time: tap where the roll landed, answer "was it a double?", pass the dice. */
+export function TurnPanel({ game, state, board }: { game: Game; state: State; board?: ReactNode }) {
   const ui = useUI()
   const p = game.players.find(x => x.id === state.turn)!
   const next = game.players.find(x => x.id === nextPlayer(game, state))!
@@ -141,7 +135,6 @@ export function TurnPanel({ game, state, onOverride, board }: { game: Game; stat
           ) : endTurn}
         </div>
       )}
-      {landed && onOverride && <button className="link-btn" onClick={onOverride}>Wrong square? Undo it, or record another landing</button>}
 
       <div className="turn-tools" role="group" aria-label="Any time">
         <button className="ghost" onClick={() => ui.open({ kind: 'portfolio', player: p.id })}>Build or mortgage</button>
@@ -181,16 +174,12 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
   const { game, state, entries } = snap
   const last = entries.at(-1)
   const turns = entries.filter(e => e.ops.some(o => o.op === 'turn')).length
-  // the host's override: one more landing after the roll's own, to fix a wrong tap. It lasts until the next entry.
-  const [extra, setExtra] = useState(-1)
-  const moving = !state.jailed[state.turn] && (state.moves > 0 || extra === entries.length)
-  const cardMove = !!last?.ops.some(o => o.op === 'moves')
+  // squares no roll or card reaches show their deed; the host can still record a landing there from it, to fix a mistake
+  const due = landing(game, state, state.turn)
   // one column (tablets, phones): the board sits in the turn panel, right under "tap where it lands"
   const narrow = useSyncExternalStore(onNarrow, () => narrowQuery.matches)
   const board = (
-    <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell, landed: moving })}
-      reach={moving && !cardMove ? reachable(game, state, state.turn) : undefined}
-      hint={moving ? `Tap where ${game.players.find(p => p.id === state.turn)!.name} landed` : undefined}
+    <BoardMap game={game} state={state} {...due} onPick={cell => ui.open({ kind: 'cell', cell, landed: !!due.reach && cell in due.reach })}
       stage={webgl ? <Suspense fallback={null}><Stage game={game} state={state} entries={entries} /></Suspense> : undefined} />
   )
 
@@ -224,7 +213,7 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
             <PlayerRail game={game} state={state} />
           </section>
           {ui.live?.kind === 'host' && <HostInbox live={ui.live} game={game} />}
-          <TurnPanel key={`${state.turn}:${turns}`} game={game} state={state} board={narrow ? board : undefined} onOverride={() => { setExtra(entries.length); ui.say('Undo the wrong landing below, or tap the square to record another one') }} />
+          <TurnPanel key={`${state.turn}:${turns}`} game={game} state={state} board={narrow ? board : undefined} />
         </div>
         {!narrow && board}
       </main>

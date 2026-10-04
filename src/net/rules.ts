@@ -1,4 +1,4 @@
-import { ACTIONS, type ActionName, type Landing } from '../engine/actions.ts'
+import { ACTIONS, reach, type ActionName, type Landing } from '../engine/actions.ts'
 import { pactFor } from '../engine/engine.ts'
 import { type LoanDraft, type PactDraft, type PassDraft } from '../engine/deals.ts'
 import type { Game, Party, State } from '../engine/types.ts'
@@ -24,11 +24,12 @@ export function gate(g: Game, s: State, me: string, name: string, args: unknown[
     pid !== me ? { error: 'That is another player’s move' } : turn ? gate : { error: 'Wait for your turn' }
   switch (name as ActionName) {
     case 'land': {
-      const [pid, , how] = args as [string, number, Landing?]
+      const [pid, cell, how] = args as [string, number, Landing?]
       if (how?.do === 'rent' && ![undefined, 1, 2].includes(how.opts?.railroadMultiplier)) return { error: 'Unknown rent multiplier' }
       const g2 = mine(pid)
       if ('error' in g2) return g2
-      return s.moves > 0 ? NOW : { error: s.jailed[me] ? 'You are in jail' : 'That roll is already recorded. If it was the wrong square, ask the host to undo it.' }
+      if (s.moves <= 0) return { error: s.jailed[me] ? 'You are in jail' : 'That roll is already recorded. If it was the wrong square, ask the host to undo it.' }
+      return cell in reach(g, s, me) ? NOW : { error: 'Your piece cannot get there from where it stands' }
     }
     case 'rollDoubles': return mine(a[0])
     case 'endTurn': {
@@ -70,6 +71,6 @@ export function auctionProblem(g: Game, s: State, me: string, cell: number): str
   if (s.turn !== me) return 'Only the player who landed there can auction it'
   const c = g.board.cells[cell]
   if (!c?.price || s.owner[cell]) return 'Only an unowned deed can be auctioned'
-  if (s.pos[me] !== cell) return 'Auction the square you are standing on'
+  if (s.pos[me] !== cell || s.moves > 0) return 'Auction the square you just landed on'
   return null
 }

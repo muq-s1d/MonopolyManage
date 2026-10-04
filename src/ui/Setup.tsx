@@ -6,7 +6,7 @@ import { defaultRules, money } from '../engine/engine.ts'
 import type { Player, Rules } from '../engine/types.ts'
 import { customBoards, store } from '../store.ts'
 import { useUI } from './ctx.ts'
-import { ACCESSORIES, PhoneMark, PLAYER_COLORS, Seal, Switch } from './kit.tsx'
+import { ACCESSORIES, PhoneMark, PLAYER_COLORS, reducedMotion, Seal, Switch } from './kit.tsx'
 import { sfx } from './sound.ts'
 
 export const RULES: { key: keyof Rules; label: string; help: string }[] = [
@@ -27,7 +27,7 @@ const noSub = () => () => {}
 const uid = () => crypto.randomUUID().slice(0, 8)
 const randomSeed = () => Math.floor(Math.random() * 1e9)
 const transition = (fn: () => void) =>
-  'startViewTransition' in document && !matchMedia('(prefers-reduced-motion: reduce)').matches
+  'startViewTransition' in document && !reducedMotion.matches
     ? document.startViewTransition(() => flushSync(fn))
     : fn()
 

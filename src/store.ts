@@ -11,6 +11,7 @@ const BOARDS = 'counting-house.boards.v1'
 const PREFS = 'counting-house.prefs'
 const SESSION = 'counting-house.session'
 const PHONE = 'counting-house.phone'
+const KEY_PAIR = 'counting-house.key'
 
 const read = <T,>(key: string, fallback: T): T => {
   try { return JSON.parse(localStorage.getItem(key) ?? '') ?? fallback } catch { return fallback }
@@ -61,14 +62,17 @@ export const store = {
 export const useSnap = () => useSyncExternalStore(store.subscribe, () => snap)
 
 /** The session a host is running for the saved game, so a reload reopens the same room. */
-export type SessionRecord = Seats & { code: string; secret: string; game: string }
-/** A phone's seat, so a reload or a new battery reclaims it. */
-export type PhoneRecord = { code: string; token: string }
+type SessionRecord = Seats & { code: string; game: string }
+/** The session this phone holds a seat in; its device key reclaims the seat. */
+type PhoneRecord = { code: string }
 export const sessions = {
   host: () => { const r = read<SessionRecord | null>(SESSION, null); return r && r.game === snap?.game.id ? r : null },
   saveHost: (r: SessionRecord | null) => (r ? write(SESSION, r) : drop(SESSION)),
   phone: () => read<PhoneRecord | null>(PHONE, null),
   savePhone: (r: PhoneRecord | null) => (r ? write(PHONE, r) : drop(PHONE)),
+  /** This device's private signing key, as a JWK. */
+  key: () => read<JsonWebKey | null>(KEY_PAIR, null),
+  saveKey: (k: JsonWebKey) => write(KEY_PAIR, k),
 }
 
 export const customBoards = {
