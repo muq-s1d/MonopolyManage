@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.muqs1d.countinghouse",
+    "sha256_cert_fingerprints": ["1D:40:AF:C6:91:55:09:03:25:64:EC:75:26:C8:82:1E:8D:69:E9:E1:B4:A9:E6:69:2C:91:C9:FD:6F:A8:1A:BC"]
+  }
+}]

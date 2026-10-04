@@ -81,7 +81,8 @@ export const customBoards = {
   remove: (id: string) => write(BOARDS, customBoards.list().filter(x => x.id !== id)),
 }
 
-export type Prefs = { theme?: 'light' | 'dark'; sound?: boolean; seenRelease?: string; scenes?: boolean }
+/** `apk`: the version of the Android app this browser was opened from, if any. */
+export type Prefs = { theme?: 'light' | 'dark'; sound?: boolean; seenRelease?: string; scenes?: boolean; apk?: number }
 export const prefs = {
   get: () => read<Prefs>(PREFS, {}),
   set: (p: Prefs) => write(PREFS, { ...prefs.get(), ...p }),

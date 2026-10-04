@@ -5,3 +5,8 @@ dist
 .env*
 graphify-out/
 .claude/settings.local.json
+
+# the Android app: generated project and the built APK (the signing key lives in ~/.config/counting-house)
+android/project/
+android/*.apk
+android/*.idsig

@@ -1,7 +1,25 @@
+/**
+ * The Android app: a thin shell that opens this site full screen, so the site's releases reach it by themselves.
+ * Bump `version` only when the shell itself changes (name, icon, colours), build it (android/build.mjs), attach it to
+ * that release on GitHub, and point `url` there. The app opens with `?apk=<version>`, so it knows when it is behind.
+ */
+export const APK = { version: 1, url: 'https://github.com/muq-s1d/MonopolyManage/releases/download/v1.4.0/the-counting-house.apk' }
+
 /** Release notes, newest first. The first entry is the current version (keep package.json in step). */
 export type Release = { version: string; date: string; title: string; items: { lead: string; text: string }[] }
 
 export const RELEASES: Release[] = [
+  {
+    version: '1.4.0',
+    date: '2026-10-04',
+    title: 'An Android app, and the story of the game',
+    items: [
+      { lead: 'An Android app', text: 'Download it from the lobby on an Android phone, or from the release page, and install it straight from the file. It opens the site full screen, so every new release reaches it on its own; if the app itself ever changes, it asks you to download the new one.' },
+      { lead: 'Highlights', text: 'The end of the game now names the landlord, the big spender, the biggest payday, who passed Go most and who saw the most of jail.' },
+      { lead: 'Net worth, round by round', text: 'A small chart for each player shows how their fortune rose and fell. Touch one to see every player at that round.' },
+      { lead: 'Just watch', text: 'Join a session without a seat to follow the game on a TV or a spare phone: the board, everyone’s money and every moment.' },
+    ],
+  },
   {
     version: '1.3.2',
     date: '2026-10-04',

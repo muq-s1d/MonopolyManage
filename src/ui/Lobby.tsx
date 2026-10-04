@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CircleHelp, Monitor, Smartphone } from 'lucide-react'
-import { sessions, store, useSnap } from '../store.ts'
+import { prefs, sessions, store, useSnap } from '../store.ts'
+import { APK } from '../releases.ts'
 import { useUI } from './ctx.ts'
 import { reducedMotion, Seal, webgl } from './kit.tsx'
 import { NewsPill } from './WhatsNew.tsx'
@@ -9,6 +10,7 @@ import { NewsPill } from './WhatsNew.tsx'
 // and never loads for reduced motion, without WebGL, or with Data Saver on
 const Coil = lazy(() => import('../stage/Coil.tsx'))
 
+const android = /Android/i.test(navigator.userAgent)
 const ready = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_KEY
 const NOT_SET_UP = 'Sessions are not set up on this copy of the site. Everything else works as usual.'
 
@@ -28,6 +30,7 @@ export default function Lobby() {
   }, [])
   const saved = snap ? sessions.host() : null
   const seat = sessions.phone()
+  const installed = prefs.get().apk // set when the Android app opened this browser
 
   // the session code is a lazy chunk: admin mode never downloads it
   const host = async (resume: boolean) => {
@@ -56,6 +59,9 @@ export default function Lobby() {
         <h1 className="display lobby-title">The Counting House</h1>
         <p className="lobby-lede">The bank for your board game nights. You roll the dice, it keeps the money.</p>
         <NewsPill onOpen={ui.notes} />
+        {installed && installed < APK.version && (
+          <p className="app-update" role="status">A new version of the app is ready. <a className="plaque" href={APK.url}>Download</a></p>
+        )}
 
         <div className="lobby-groups">
           <section className="lobby-group" aria-labelledby="play-one">
@@ -71,7 +77,7 @@ export default function Lobby() {
           <section className="lobby-group" aria-labelledby="play-phones">
             <h2 id="play-phones" className="eyebrow"><Smartphone size={15} aria-hidden="true" /> Everyone’s phones</h2>
             {saved && <button className="plaque big" disabled={busy} onClick={() => host(true)}>Resume session {saved.code}</button>}
-            {seat && ready && <button className="plaque big" onClick={() => { location.hash = `join=${seat.code}`; ui.go('join') }}>Rejoin session {seat.code}</button>}
+            {seat?.seated && ready && <button className="plaque big" onClick={() => { location.hash = `join=${seat.code}`; ui.go('join') }}>Rejoin session {seat.code}</button>}
             <div className="lobby-pair">
               <button className="ghost" disabled={busy} onClick={() => host(false)}>{busy ? 'Opening' : 'Host a session'}</button>
               <button className="ghost" onClick={() => (ready ? ui.go('join') : setError(NOT_SET_UP))}>Join a session</button>
@@ -83,6 +89,7 @@ export default function Lobby() {
               <button className="ghost" onClick={() => file.current?.click()}>Restore a backup</button>
               <button className="ghost" onClick={() => ui.go('editor')}>Design a board</button>
             </div>
+            {android && !installed && <a className="ghost" href={APK.url}>Get the Android app</a>}
             <input ref={file} type="file" accept="application/json,.json" hidden onChange={e => importFile(e.target.files?.[0])} />
           </section>
         </div>
