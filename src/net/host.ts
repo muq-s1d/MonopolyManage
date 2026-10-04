@@ -14,7 +14,9 @@ export type Book = {
 }
 
 /** What the host keeps across reloads: which device key holds which seat, the public keys, and which may approve. */
-export type Seats = { seats: Record<string, string>; keys: Record<string, JsonWebKey>; admins: string[]; secret?: string }
+export type Seats = { seats: Record<string, string>; keys: Record<string, JsonWebKey>; admins: string[]; secret?: string; auction?: SavedAuction | null }
+/** A running auction as saved, with its deadline on the host's clock. */
+type SavedAuction = Omit<Auction, 'ms'> & { ends: number }
 
 type Opts = {
   /** The host's own key pair: it signs everything the host says, so phones can tell the real host from an impostor. */
@@ -102,9 +104,9 @@ export function createHost(book: Book, post: (m: Msg) => void, o: Opts) {
   })
 
   // ---------- live auction: every phone bids, the host screen bids for players without one ----------
-  // ponytail: kept in memory only; a host reload mid-auction drops it, and the player auctions again
+  // saved with the session, so a host reload picks the auction up where it was
   const clock = o.auctionMs ?? { open: 20000, bid: 10000 }
-  let auction: (Omit<Auction, 'ms'> & { ends: number; timer: ReturnType<typeof setTimeout> }) | null = null
+  let auction: (SavedAuction & { timer: ReturnType<typeof setTimeout> }) | null = null
   const auctionView = (): Auction | null => auction && { id: auction.id, cell: auction.cell, by: auction.by, steps: auction.steps, high: auction.high, out: auction.out, ms: Math.max(0, auction.ends - Date.now()) }
   const sendAuction = () => { send({ t: 'auction', auction: auctionView() }); changed() }
   const arm = (ms: number) => {
@@ -333,6 +335,10 @@ export function createHost(book: Book, post: (m: Msg) => void, o: Opts) {
   }
   let queue = Promise.resolve() // one at a time, in the order they arrived
 
+  // an auction that was running when the host screen reloaded: the clock carries on, with a few seconds to get back
+  const was = o.resume?.auction
+  if (was && started) { auction = { ...was, timer: 0 as never }; arm(Math.max(5000, was.ends - Date.now())) }
+
   return {
     receive(m: Msg) {
       if (m.t === 'hi') return greet()
@@ -373,7 +379,7 @@ export function createHost(book: Book, post: (m: Msg) => void, o: Opts) {
     get version() { return version },
     /** Player ids with a phone, and the device each last used. */
     get devices() { return Object.fromEntries(Object.values(seats).map(pid => [pid, devices[pid] ?? ''])) },
-    save: (): Seats => ({ seats: { ...seats }, keys: { ...keys }, admins: [...admins], secret }),
+    save: (): Seats => ({ seats: { ...seats }, keys: { ...keys }, admins: [...admins], secret, auction: auction && { id: auction.id, cell: auction.cell, by: auction.by, steps: auction.steps, high: auction.high, out: auction.out, ends: auction.ends } }),
     /** This host's key name, which phones pin. */
     get key() { return o.id.key },
     /** The current secret for the host's own phone; it changes once used. */
