@@ -11,7 +11,7 @@ No paper money to count, no rent tables to squint at, no banker mistakes. Host a
 ## What it does
 
 - **Setup:** 2 to 8 players, each with a colour, a banknote seal and a 3D creature wearing a 1930s accessory. The turn order is shuffled for you. Choose the Classic US or UK London board, or one you designed yourself.
-- **Tap the board:** roll, move your piece, then tap the square it landed on. The squares a roll can reach show their dice total, so a 7 means tap the 7. The app offers only what fits that square: buy it or auction it, pay rent (worked out for you, with the reason shown), pay tax, draw a card, go to jail, or collect the Free Parking pot.
+- **Tap the board:** roll, move your piece, then tap the square it landed on. The squares a roll can reach show their dice total, so a 7 means tap the 7; any other square only shows its deed. The app offers only what fits that square: buy it or auction it, pay rent (worked out for you, with the reason shown, and a utility charged on the roll that got there), pay tax, draw a card, go to jail, or collect the Free Parking pot.
 - **One square per roll:** each roll records one landing, and a double gets another; the third double goes to jail. A wrong tap is fixed with Undo. The app knows where every piece stands, shows them on the board, and pays the Go salary when a move passes it.
 - **Live auctions:** in a session, auctioning a deed puts bid buttons and a countdown on every phone. Whoever starts it picks the steps, like $10, $20 and $50. The top bid wins when the clock runs out or everyone else is out, and the host screen bids for players without a phone.
 - **Cards:** pick the Chance or Community Chest card that was drawn and the app applies it: payments, birthday collections, repairs per house and hotel. Cards that move you open the square they lead to, nearest railroad or utility included.
@@ -62,11 +62,11 @@ New in 1.2. Tap **Host a session** in the lobby. The host screen becomes the big
 - **Moments.** Every notable event plays a short animated strip on every device, and the big ones (buying, a hotel, jail, a pact, a trade, the jackpot, bankruptcy, the winner) get a short full screen scene you can tap to skip. They can be switched off in the menu, and they are available in the one-screen mode too, off by default.
 - **Reloads and dead batteries.** A phone keeps its seat, so a reload drops you straight back in. A new phone can take an existing seat once the host agrees. Reopening the host screen offers **Resume session** and the phones reconnect by themselves.
 
-![Otto's phone: his creature, his cash, and a trade from Riva waiting for his answer](docs/session-phone.jpg)
+![Otto's phone: his cash, a trade from Riva waiting for his answer, and the board](docs/session-phone.jpg)
 
 ![The host screen during a session: phone marks on each player and the requests tray](docs/session-table.jpg)
 
-Sessions run over [Supabase Realtime](https://supabase.com/docs/guides/realtime): every message is a secure WebSocket on port 443, like ordinary web browsing, so it should work on mobile data and on campus Wi-Fi that blocks devices from talking to each other. There is no server of ours: the host screen is the bank, it checks every request from a phone against the same rules engine, and phones only ever ask. Sessions are meant for friends at one table. The session code is the only key, so anyone who knows it could listen in.
+Sessions run over [Supabase Realtime](https://supabase.com/docs/guides/realtime): every message is a secure WebSocket on port 443, like ordinary web browsing, so it should work on mobile data and on campus Wi-Fi that blocks devices from talking to each other. There is no server of ours: the host screen is the bank, it checks every request from a phone against the same rules engine, and phones only ever ask. Sessions are meant for friends at one table. Anyone with the session code can watch the game, but nobody can act as another player: each phone signs what it sends with a key that never leaves it, and the host refuses anything copied, changed or replayed.
 
 ## How it works
 
