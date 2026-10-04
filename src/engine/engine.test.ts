@@ -433,3 +433,32 @@ test('the squares a roll reaches, and a utility charged on the roll that got the
   check('a 12 onto Electric Company costs 4 x 12, whatever dice the phone claims', 1500 - 48, t.s.cash.ann)
   assert.deepEqual(reach(t.g, t.s, 'ann'), {}, 'the roll is used up')
 })
+
+test('game highlights, hand checked: rent, Go, jail, the priciest deed, the biggest payment, worth by round', async () => {
+  const { land } = await import('./actions.ts')
+  const { highlights, leader } = await import('./stats.ts')
+  const t = setup()
+  const bw = idx('Boardwalk'), rr = idx('Reading Railroad')
+  t.run(land(t.g, t.s, 'bob', bw, { do: 'buy' }))                    // bob lands on Boardwalk: 1500 - 400 = 1100
+  t.run(land(t.g, t.s, 'ann', rr, { do: 'buy' }))                     // ann: 1500 - 200 = 1300
+  t.run(E.endTurn(t.g, t.s))
+  t.run(E.transfer(t.g, t.s, 'cat', 'bob', 300, 'a deal'))            // cat 1200, bob 1400
+  t.run(E.endTurn(t.g, t.s)); t.run(E.endTurn(t.g, t.s))             // round 1 ends
+  t.run(E.endTurn(t.g, t.s))                                          // bob's turn
+  t.run(land(t.g, t.s, 'bob', rr, { do: 'rent' }))                    // Boardwalk to Reading passes Go (+200), then 25 rent to ann
+  t.run(E.goToJail(t.g, 'cat'))
+  const h = highlights(t.g, t.log)
+  check('ann collected rent', 25, h.rent.ann)
+  check('bob passed Go once', 1, h.go.bob)
+  check('cat went to jail once', 1, h.jail.cat)
+  check('priciest deed: Boardwalk', 400, h.buy!.amount)
+  assert.equal(h.buy!.pid, 'bob')
+  check('biggest payment between players', 300, h.payment!.amount)
+  assert.deepEqual(h.worth.map(w => w.round), [0, 1, 2], 'start, after round 1, and round 2 in progress')
+  check('ann worth at the start', 1500, h.worth[0].values.ann)
+  check('ann after round 1: 1300 cash + 200 Reading', 1500, h.worth[1].values.ann)
+  check('bob now: 1400 + 200 Go - 25 rent + 400 Boardwalk', 1975, h.worth[2].values.bob)
+  assert.deepEqual(leader(h.rent), { id: 'ann', n: 25 })
+  assert.equal(leader(h.go)?.id, 'bob')
+  assert.equal(leader({ ann: 0 }), null)
+})
