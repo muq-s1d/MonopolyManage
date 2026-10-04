@@ -557,3 +557,14 @@
 body:has(.auction-dock) .toast { inset: max(12px, env(safe-area-inset-top)) auto auto 50%; }
 /* a phone has no ticker, so the end of the turn sits on the bottom edge, under the thumb */
 .phone .turn-end { bottom: 0; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+
+/* ---------- dice pad: thumb sized buttons for the squares a landing can be ---------- */
+.dice-pad { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45rem; margin-top: 0.6rem; }
+.dice-key { position: relative; display: grid; justify-items: center; align-content: center; gap: 0.1rem; min-height: 58px; padding: 0.45rem 0.25rem 0.35rem;
+  border: 1px solid var(--line); border-top: 5px solid var(--band); border-radius: 10px; color: var(--ink); cursor: pointer;
+  background: linear-gradient(color-mix(in srgb, var(--owner) 22%, transparent), color-mix(in srgb, var(--owner) 22%, transparent)), var(--surface); }
+.dice-key:active { transform: scale(0.97); }
+.dice-key .num { font: 800 1.35rem/1 var(--f-num); color: var(--brass-hi); }
+:root[data-theme='light'] .dice-key .num { color: var(--brass-lo); }
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .dice-key .num { color: var(--brass-lo); } }
+.dice-key small { font-size: 0.72rem; line-height: 1.15; text-align: center; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

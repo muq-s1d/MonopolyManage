@@ -92,4 +92,28 @@ function BoardMap({ game, state, onPick, highlight, stage, reach, hint }: {
   )
 }
 
+/**
+ * Big buttons for the squares a landing can be, one per dice total: thumb sized where a board square is not.
+ * Each shows the total, the square, its colour and who owns it.
+ */
+export function DicePad({ game, state, reach, onPick }: { game: Game; state: State; reach: Record<number, number>; onPick: (cell: number) => void }) {
+  const b = game.board
+  const cells = Object.keys(reach).map(Number).sort((x, y) => Math.abs(reach[x]) - Math.abs(reach[y]))
+  return (
+    <div className="dice-pad" role="group" aria-label="Where did you land?">
+      {cells.map(i => {
+        const c = b.cells[i], d = reach[i], owner = game.players.find(p => p.id === state.owner[i])
+        return (
+          <button key={i} className="dice-key" onClick={() => onPick(i)}
+            style={{ ['--band' as string]: b.groups.find(g => g.id === c.group)?.color ?? 'var(--line)', ['--owner' as string]: owner?.color ?? 'transparent' }}
+            aria-label={`${d > 0 ? `Rolled ${d}` : d < 0 ? `${-d} back` : 'Where the card sends you'}: ${c.name}${owner ? `, owned by ${owner.name}` : ''}`}>
+            <span className="num">{d > 0 ? d : d < 0 ? `−${-d}` : '★'}</span>
+            <small>{shortName(c.name)}</small>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export default memo(BoardMap)
