@@ -30,9 +30,11 @@ export function ThemeToggle() {
   )
 }
 
-function PlayerRail({ game, state }: { game: Game; state: State }) {
+/** Everyone's money and deeds, in turn order. `watch`: for a watcher, who can look but not open anyone's portfolio. */
+export function PlayerRail({ game, state, watch }: { game: Game; state: State; watch?: boolean }) {
   const ui = useUI()
   const owes = (pid: string) => Object.values(state.loans).reduce((t, l) => t + (l.borrower === pid ? l.repay : 0), 0)
+  const Card = watch ? 'div' : 'button'
   return (
     <ol className="rail" data-many={game.players.length >= 5} aria-label="Players in turn order">
       {game.players.map(p => {
@@ -40,9 +42,9 @@ function PlayerRail({ game, state }: { game: Game; state: State }) {
         const out = state.bankrupt[p.id]
         return (
           <li key={p.id}>
-            <button className={`rail-card${state.turn === p.id ? ' active' : ''}${out ? ' out' : ''}`}
-              onClick={() => ui.open({ kind: 'portfolio', player: p.id })}
-              aria-label={`${p.name}, ${money(game.board, state.cash[p.id])} cash, ${deeds} ${deeds === 1 ? 'deed' : 'deeds'}${state.jailed[p.id] ? ', in jail' : ''}${out ? ', bankrupt' : ''}. Open portfolio.`}>
+            <Card className={`rail-card${state.turn === p.id ? ' active' : ''}${out ? ' out' : ''}`}
+              {...(!watch && { onClick: () => ui.open({ kind: 'portfolio', player: p.id }),
+                'aria-label': `${p.name}, ${money(game.board, state.cash[p.id])} cash, ${deeds} ${deeds === 1 ? 'deed' : 'deeds'}${state.jailed[p.id] ? ', in jail' : ''}${out ? ', bankrupt' : ''}. Open portfolio.` })}>
               <Seal player={p} size={52} />
               <span className="rail-text">
                 <span className="rail-name">{p.name}{ui.live?.kind === 'host' && <PhoneMark live={ui.live} pid={p.id} />}</span>
@@ -56,7 +58,7 @@ function PlayerRail({ game, state }: { game: Game; state: State }) {
                 </span>
               </span>
               {state.turn === p.id && <span className="rail-turn eyebrow">Turn</span>}
-            </button>
+            </Card>
           </li>
         )
       })}

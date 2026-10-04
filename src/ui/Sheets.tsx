@@ -196,7 +196,7 @@ function CellSheet({ game, state, cell, landed, opts = {} }: Props & { cell: num
           {go && <p className="go-line">Passed Go: <strong className="num">+{m(b.salary)}</strong></p>}
           {action}
           {!landed && !ownable && <p className="muted">{game.players.filter(x => state.pos[x.id] === cell && !state.bankrupt[x.id]).map(x => x.name).join(', ') || 'Nobody'} {game.players.filter(x => state.pos[x.id] === cell).length > 1 ? 'are' : 'is'} here.</p>}
-          {ownable && owner && (
+          {ownable && owner && !(ui.live?.kind === 'phone' && !ui.me) && (
             <>
               {landed && <hr className="rule" />}
               <p className="eyebrow">Owner tools</p>
