@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { renderSVG } from 'uqr'
 import { heardHost, isHostHere, phoneSession, type HostLive, type PhoneLive } from '../net/live.ts'
 import { cleanCode } from '../net/session.ts'
 import { sessions } from '../store.ts'
 import { joinLink, useUI } from './ctx.ts'
-import { ACCESSORIES, PLAYER_COLORS, Seal } from './kit.tsx'
+import { ACCESSORIES, PLAYER_COLORS, Seal, webgl } from './kit.tsx'
 import Phone from './Phone.tsx'
+import AuctionDock from './Auction.tsx'
+import BoardMap from './BoardMap.tsx'
+import { PlayerRail, ThemeToggle } from './Table.tsx'
 import { sfx } from './sound.ts'
 
+const Stage = lazy(() => import('../stage/Stage.tsx'))
 const randomSeed = () => Math.floor(Math.random() * 1e9)
 const forget = () => history.replaceState(null, '', location.pathname + location.search)
 
@@ -76,6 +80,9 @@ function Seated({ live }: { live: PhoneLive }) {
   const leave = (seat: 'keep' | 'forget' = 'keep') => { live.close(); if (seat === 'forget') sessions.savePhone(null); forget(); ui.setLive(null); ui.go('lobby') }
   const rejoin = () => { live.close(); ui.setLive(null); location.hash = `join=${live.code}`; ui.go('join') }
   const me = view.players.find(p => p.id === view.pid)
+  const [watching, setWatching] = useState(false)
+  const banner = <LinkBanner up={wire.up} since={wire.since} hostHere={isHostHere(wire)} heard={view.heard} onRejoin={rejoin} />
+  if (watching && view.game && !view.ended) return <>{banner}<Watch live={live} onStop={() => leave()} /></>
 
   let body
   if (view.ended) body = (
@@ -86,7 +93,18 @@ function Seated({ live }: { live: PhoneLive }) {
       <div className="btn-row"><button className="plaque big" onClick={() => leave('forget')}>Back to the lobby</button></div>
     </section>
   )
-  else if (!me) body = <PickStep live={live} />
+  else if (!me && watching) body = (
+    <section className="panel join-card">
+      <p className="eyebrow">Session {live.code}</p>
+      <h1 className="display">Watching</h1>
+      <p className="muted">The board shows here when the host opens the bank.</p>
+      <ul className="join-roster" aria-label="Seated so far">
+        {view.players.map(p => <li key={p.id}><Seal player={p} size={32} initial={false} />{p.name}</li>)}
+      </ul>
+      <div className="btn-row"><button className="ghost" onClick={() => leave()}>Stop watching</button></div>
+    </section>
+  )
+  else if (!me) body = <PickStep live={live} onWatch={() => setWatching(true)} />
   else if (!view.game) body = (
     <section className="panel join-card">
       <p className="eyebrow">Session {live.code}</p>
@@ -114,6 +132,42 @@ function Seated({ live }: { live: PhoneLive }) {
   )
 }
 
+/** A seat-less view of the table, for a TV or a friend following along: everyone's money, the board, the moments. */
+function Watch({ live, onStop }: { live: PhoneLive; onStop: () => void }) {
+  const ui = useUI()
+  const view = useSyncExternalStore(live.client.subscribe, live.client.get)
+  const game = view.game!, state = view.state!, last = view.entries.at(-1)
+  const player = game.players.find(p => p.id === state.turn)
+  return (
+    <div className="table watch">
+      <header className="topbar">
+        <p className="display topbar-mark">The Counting House</p>
+        <p className="topbar-info muted">Watching session <span className="num">{live.code}</span>, round <span className="num">{state.round}</span></p>
+        <nav className="topbar-actions" aria-label="Watching">
+          <ThemeToggle />
+          <button className="ghost" onClick={onStop}>Stop watching</button>
+        </nav>
+      </header>
+      <main className="table-main">
+        <div className="table-left">
+          <section className="stage-area" aria-label="Players">
+            <div className="stage-burst sunburst" aria-hidden="true" />
+            <PlayerRail game={game} state={state} watch />
+          </section>
+          {player && <section className="panel turn"><p className="eyebrow">Round {state.round}</p><h2 className="display turn-title">{player.name} is playing</h2></section>}
+        </div>
+        <BoardMap game={game} state={state} onPick={cell => ui.open({ kind: 'cell', cell })}
+          stage={webgl ? <Suspense fallback={null}><Stage game={game} state={state} entries={view.entries} /></Suspense> : undefined} />
+      </main>
+      {view.auction && <AuctionDock game={game} state={state} auction={view.auction} me={null} />}
+      <footer className="ticker" aria-live="polite">
+        <span className="eyebrow">Last entry</span>
+        <span className="ticker-text">{last ? last.memo : 'Nothing recorded yet.'}</span>
+      </footer>
+    </div>
+  )
+}
+
 /** Shown while the link or the host is away. After two minutes down, offers a clean rejoin. */
 function LinkBanner({ up, since, hostHere, heard, onRejoin }: { up: boolean; since: number; hostHere: boolean; heard: boolean; onRejoin: () => void }) {
   const [, tick] = useState(0)
@@ -129,7 +183,7 @@ function LinkBanner({ up, since, hostHere, heard, onRejoin }: { up: boolean; sin
   )
 }
 
-function PickStep({ live }: { live: PhoneLive }) {
+function PickStep({ live, onWatch }: { live: PhoneLive; onWatch: () => void }) {
   const view = useSyncExternalStore(live.client.subscribe, live.client.get)
   const taken = new Set(view.players.map(p => p.color))
   const free = PLAYER_COLORS.filter(c => !taken.has(c.hex))
@@ -150,7 +204,7 @@ function PickStep({ live }: { live: PhoneLive }) {
     if (r.error) { sfx('error'); setError(r.error) } else sfx('tick')
   }
 
-  if (view.game) return <ClaimStep live={live} />
+  if (view.game) return <ClaimStep live={live} onWatch={onWatch} />
 
   return (
     <form className="panel join-card" onSubmit={e => { e.preventDefault(); submit() }}>
@@ -181,12 +235,13 @@ function PickStep({ live }: { live: PhoneLive }) {
       </fieldset>
       <p id="pick-err" className="error-text" role="alert">{error}</p>
       <button className="plaque big" type="submit" disabled={busy || !pick}>{busy ? 'Taking the seat' : 'Take my seat'}</button>
+      <button className="ghost" type="button" onClick={onWatch}>Just watch</button>
     </form>
   )
 }
 
 /** After the start: pick your existing seat, and the host approves the new phone. */
-function ClaimStep({ live }: { live: PhoneLive }) {
+function ClaimStep({ live, onWatch }: { live: PhoneLive; onWatch: () => void }) {
   const view = useSyncExternalStore(live.client.subscribe, live.client.get)
   const [asked, setAsked] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -208,6 +263,7 @@ function ClaimStep({ live }: { live: PhoneLive }) {
               <li key={p.id}><button className="ghost" onClick={() => claim(p.id)}><Seal player={p} size={28} initial={false} /> I am {p.name}</button></li>
             ))}
           </ul>
+          <button className="ghost" onClick={onWatch}>Just watch</button>
         </>
       )}
       <p className="error-text" role="alert">{error}</p>
