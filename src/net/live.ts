@@ -1,4 +1,5 @@
 import { sessions, store } from '../store.ts'
+import { joinLink } from '../ui/ctx.ts'
 import { ACCESSORIES, PLAYER_COLORS } from '../ui/kit.tsx'
 import { createClient, type Client } from './client.ts'
 import { createHost, type Host } from './host.ts'
@@ -37,11 +38,13 @@ async function link(code: string, me: string, onMsg: (m: Msg) => void, w: Return
 export async function hostSession(resume: boolean): Promise<HostLive> {
   const saved = resume ? sessions.host() : null
   const code = saved?.code ?? newCode(), secret = saved?.secret ?? crypto.randomUUID().slice(0, 12)
+  // the host keeps its key for the whole session, so phones that pinned it still trust it after a reload
+  const id = await identity(saved?.hostKey)
   const w = wiring()
   let l: Link | null = null
   const host: Host = createHost(store, m => void l?.send(m), {
-    colors: PLAYER_COLORS.map(c => c.hex), accessories: ACCESSORIES.length, secret, resume: saved ?? undefined,
-    onChange: () => { const g = store.get(); if (host?.started && g) sessions.saveHost({ code, game: g.game.id, ...host.save() }) },
+    id, colors: PLAYER_COLORS.map(c => c.hex), accessories: ACCESSORIES.length, secret, resume: saved ?? undefined,
+    onChange: () => { const g = store.get(); if (host?.started && g) sessions.saveHost({ code, game: g.game.id, hostKey: id.jwk, ...host.save() }) },
   })
   l = await link(code, HOST_DEVICE, m => host.receive(m), w, () => host.announce())
   host.announce()
@@ -59,10 +62,17 @@ export async function phoneSession(code: string, onSay: (text: string, error: bo
   sessions.saveKey(id.jwk)
   const w = wiring()
   let l: Link | null = null
-  const client = createClient(m => void l?.send(m), { id, onSay })
+  // the host key to trust: from the QR code, or the one this phone pinned in this session before; else the first host heard
+  const before = sessions.phone()?.code === code ? sessions.phone() : null
+  const link0 = joinLink()
+  const client = createClient(m => void l?.send(m), { id, onSay, host: (link0?.code === code ? link0.key : undefined) ?? before?.host })
   let hostWasHere = false
   l = await link(code, client.me, m => client.receive(m), w, () => client.hi())
-  const offSeat = client.subscribe(() => { if (client.get().pid && sessions.phone()?.code !== code) sessions.savePhone({ code }) })
+  const offSeat = client.subscribe(() => {
+    const v = client.get(), r = sessions.phone()
+    const next = { code, host: v.hostKey ?? undefined, seated: !!v.pid || (r?.code === code && !!r.seated) }
+    if (r?.code !== code || r.host !== next.host || !!r.seated !== next.seated) sessions.savePhone(next)
+  })
   const off = w.subscribe(() => {
     const here = w.get().present.includes(HOST_DEVICE)
     if (here && !hostWasHere) client.hi()

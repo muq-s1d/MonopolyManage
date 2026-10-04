@@ -2,7 +2,7 @@ import { run, type ActionName, type ActionArgs } from '../engine/actions.ts'
 import { active, endTurn, isErr, name } from '../engine/engine.ts'
 import type { Entry, Err, Game, Player, State } from '../engine/types.ts'
 import { auctionProblem, gate } from './rules.ts'
-import { cleanSteps, verify, type Auction, type Msg, type NewPlayer, type Offer, type Signed } from './session.ts'
+import { cleanSteps, verify, type Auction, type HostBody, type Identity, type Msg, type NewPlayer, type Offer, type Signed } from './session.ts'
 
 /** The ledger the host commits to: the saved store in the app, a plain object in tests. */
 export type Book = {
@@ -17,6 +17,8 @@ export type Book = {
 export type Seats = { seats: Record<string, string>; keys: Record<string, JsonWebKey>; admins: string[]; secret?: string }
 
 type Opts = {
+  /** The host's own key pair: it signs everything the host says, so phones can tell the real host from an impostor. */
+  id: Identity
   colors: string[]
   accessories: number
   /** Knowing this makes a phone the host's own phone, with the approval inbox. It works once, then changes. */
@@ -25,6 +27,8 @@ type Opts = {
   onChange?: () => void
   /** Auction clock: time to open the bidding, and time after each bid before the hammer falls. */
   auctionMs?: { open: number; bid: number }
+  /** The shortest gap between two hellos. */
+  helloMs?: number
 }
 
 const uid = () => crypto.randomUUID().slice(0, 8)
@@ -51,7 +55,14 @@ const exec = <K extends ActionName>(g: Game, s: State, name: K, args: ActionArgs
 
 export type Host = ReturnType<typeof createHost>
 
-export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
+export function createHost(book: Book, post: (m: Msg) => void, o: Opts) {
+  // every message goes out stamped with this host's start time and a running count, signed, in the order it was said
+  const ep = Date.now(), hk = { kty: 'EC', crv: 'P-256', x: o.id.pub.x, y: o.id.pub.y }
+  let seq = 0, outbox = Promise.resolve()
+  const send = (m: HostBody) => {
+    const body = { ...m, hk, ep, seq: ++seq }
+    outbox = outbox.then(async () => post({ ...body, sig: await o.id.sign(JSON.stringify(body)) } as Msg))
+  }
   let players: Player[] = []
   let started = !!o.resume && !!book.get()
   let offers: Offer[] = []
@@ -158,7 +169,7 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
   }
 
   function seat(m: Extract<Msg, { t: 'seat' }>) {
-    const reply = (x: Omit<Extract<Msg, { t: 'done' }>, 't' | 'to' | 'id'>) => send({ t: 'done', to: m.me, id: m.id, ...x })
+    const reply = (x: Omit<Extract<HostBody, { t: 'done' }>, 't' | 'to' | 'id'>) => send({ t: 'done', to: m.me, id: m.id, ...x })
     let pid: string | undefined = seats[m.key]
     // the host's own phone presents the secret once; after that the QR code changes, so a copy of it is worthless
     const host = !!secret && m.host === secret
@@ -283,9 +294,17 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     return null
   }
 
+  // a hello carries the whole ledger, so however many phones ask, one goes out a second at most; a late ask still gets one
+  let lastHello = 0, helloLater: ReturnType<typeof setTimeout> | null = null
+  function greet() {
+    const wait = lastHello + (o.helloMs ?? 1000) - Date.now()
+    if (wait <= 0) { lastHello = Date.now(); return hello() }
+    helloLater ??= setTimeout(() => { helloLater = null; lastHello = Date.now(); hello() }, wait)
+  }
+
   // ---------- every phone message is signed: check the key, the signature, and that it is not a replay ----------
   const WINDOW = 5 * 60_000 // phone clocks drift a little; a copied message older than this is refused
-  const seen = new Map<string, number>(), lastHi = new Map<string, number>()
+  const seen = new Map<string, number>()
   async function authentic(m: Signed<{ t: string; pub?: JsonWebKey }>) {
     const now = Date.now()
     if (typeof m.id !== 'string' || typeof m.sig !== 'string' || !(Math.abs(now - m.at) < WINDOW) || seen.has(m.id)) return false
@@ -316,13 +335,7 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
 
   return {
     receive(m: Msg) {
-      if (m.t === 'hi') {
-        // a hello carries the whole ledger: one per device every couple of seconds is plenty
-        const now = Date.now()
-        if (now - (lastHi.get(m.me) ?? 0) < 2000) return
-        lastHi.set(m.me, now)
-        return hello()
-      }
+      if (m.t === 'hi') return greet()
       if (m.t === 'seat' || m.t === 'do' || m.t === 'answer' || m.t === 'decide' || m.t === 'bid')
         queue = queue.then(async () => {
           if (await authentic(m)) return handle(m)
@@ -330,8 +343,8 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
           if (m.t === 'do' && !keys[m.key]) send({ t: 'done', to: m.me, id: m.id, error: 'This phone has no seat' })
         })
     },
-    /** Settles once every message received so far is handled. */
-    idle: () => queue,
+    /** Settles once every message received so far is handled and every answer sent. */
+    idle: () => queue.then(() => outbox),
     /** Pre-start roster edits from the host screen: add a phoneless player, reorder, remove. */
     setPlayers(ps: Player[]) {
       players = ps
@@ -361,9 +374,11 @@ export function createHost(book: Book, send: (m: Msg) => void, o: Opts) {
     /** Player ids with a phone, and the device each last used. */
     get devices() { return Object.fromEntries(Object.values(seats).map(pid => [pid, devices[pid] ?? ''])) },
     save: (): Seats => ({ seats: { ...seats }, keys: { ...keys }, admins: [...admins], secret }),
+    /** This host's key name, which phones pin. */
+    get key() { return o.id.key },
     /** The current secret for the host's own phone; it changes once used. */
     get secret() { return secret },
     subscribe(f: () => void) { subs.add(f); return () => { subs.delete(f) } },
-    close() { off(); if (auction) clearTimeout(auction.timer); send({ t: 'bye' }) },
+    close() { off(); if (auction) clearTimeout(auction.timer); if (helloLater) clearTimeout(helloLater); send({ t: 'bye' }) },
   }
 }

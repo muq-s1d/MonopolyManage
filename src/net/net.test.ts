@@ -107,12 +107,16 @@ function wire() {
 }
 const settle = () => new Promise(r => setTimeout(r, 20))
 
-function room() {
+async function room() {
   const join = wire(), book = memoryBook()
   const said: string[] = []
-  const host = createHost(book, join(m => host.receive(m)), { colors: COLORS, accessories: 8, secret: 's3cret', auctionMs: { open: 400, bid: 300 } })
+  const host = createHost(book, join(m => host.receive(m)), { id: await identity(), colors: COLORS, accessories: 8, secret: 's3cret', auctionMs: { open: 400, bid: 300 }, helloMs: 0 })
+  // a phone says hi first, as the app does, and trusts the first host that answers
   const phone = async (id?: Identity) => {
-    const c = createClient(join(m => c.receive(m)), { id: id ?? await identity(), onSay: t => said.push(t), timeoutMs: 500 })
+    const key = id ?? await identity() // before joining the wire, so nothing arrives for a phone that is not built yet
+    const c = createClient(join(m => c.receive(m)), { id: key, onSay: t => said.push(t), timeoutMs: 500 })
+    c.hi()
+    await settle()
     return c
   }
   // an eavesdropper on the channel: hears every message, and can send anything
@@ -122,7 +126,7 @@ function room() {
 }
 
 test('joining, colour clash, and reclaiming a seat', async () => {
-  const { host, phone } = room()
+  const { host, phone } = await room()
   const key = await identity()
   const riva = await phone(key), otto = await phone()
   const r = await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 2 })
@@ -142,7 +146,7 @@ test('joining, colour clash, and reclaiming a seat', async () => {
 })
 
 async function started() {
-  const r = room()
+  const r = await room()
   const riva = await r.phone(), otto = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 1 })
@@ -232,7 +236,7 @@ test('a new phone takes an existing seat once the host agrees', async () => {
 })
 
 test('the host’s own phone can approve; other phones cannot', async () => {
-  const r = room()
+  const r = await room()
   const boss = await r.phone(), riva = await r.phone()
   assert.equal((await boss.seat({ name: 'Boss', color: COLORS[0], accessory: 0 }, 's3cret')).admin, true)
   assert.equal((await riva.seat({ name: 'Riva', color: COLORS[1], accessory: 0 }, 'guess')).admin, false)
@@ -251,7 +255,7 @@ test('the host’s own phone can approve; other phones cannot', async () => {
 })
 
 test('a deal with a player who has no phone waits only for the host', async () => {
-  const r = room()
+  const r = await room()
   const riva = await r.phone(), otto = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
@@ -292,7 +296,7 @@ test('a phone that missed a sync asks again and catches up', async () => {
 })
 
 test('a live auction: steps set by the auctioneer, bids from phones and for a phoneless player, the top bid wins', async () => {
-  const r = room()
+  const r = await room()
   const riva = await r.phone(), otto = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
@@ -335,7 +339,7 @@ test('a live auction: steps set by the auctioneer, bids from phones and for a ph
 })
 
 test('an eavesdropper cannot act as another player: tampered, replayed and forged messages are dropped', async () => {
-  const r = room()
+  const r = await room()
   const riva = await r.phone(), otto = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
@@ -362,7 +366,7 @@ test('an eavesdropper cannot act as another player: tampered, replayed and forge
 })
 
 test('the host phone code works once, numbers must be whole, and requests are capped', async () => {
-  const r = room()
+  const r = await room()
   const boss = await r.phone(), riva = await r.phone(), copycat = await r.phone()
   assert.equal((await boss.seat({ name: 'Boss', color: COLORS[0], accessory: 0 }, 's3cret')).admin, true)
   assert.notEqual(r.host.secret, 's3cret', 'the secret changed once used')
@@ -380,18 +384,59 @@ test('the host phone code works once, numbers must be whole, and requests are ca
 })
 
 test('a long ledger reaches a new phone in slices under the broadcast limit', async () => {
-  const r = room()
+  const r = await room()
   const riva = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   r.host.setPlayers([...r.host.players, { id: 'ada', name: 'Ada', color: COLORS[1], accessory: 0, seed: 1 }])
   r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
   for (let i = 0; i < 700; i++) { const s = r.book.get()!; r.book.commit(E.transfer(s.game, s.state, 'ada', 'bank', 1, `fee ${i}`) as Entry) }
-  await settle()
-  const late = await r.phone()
+  await r.host.idle(); await settle() // 700 signed syncs go out first
   r.heard.length = 0
-  late.hi(); await settle()
+  const late = await r.phone()
+  await r.host.idle(); await settle()
   assert.equal(late.get().entries.length, 700)
   assert.deepEqual(late.get().state, r.book.get()!.state)
   const biggest = Math.max(...r.heard.map(m => JSON.stringify(m).length))
   assert.ok(biggest < 256_000, `largest message ${biggest} bytes`)
+})
+
+test('phones trust only the host they pinned: impostors, unsigned and replayed host messages are ignored', async () => {
+  const r = await room()
+  const riva = await r.phone()
+  await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
+  r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
+  await r.host.idle(); await settle()
+  assert.equal(riva.get().hostKey, r.host.key, 'the first host heard is pinned')
+  const real = riva.get().state
+  const oldHello = r.heard.find(m => m.t === 'hello' && !m.game)! // from before the start
+  // an impostor signs a hello with its own key, claiming a different ledger
+  const fake = await identity()
+  const forge = async (b: object) => {
+    const body = { ...b, hk: fake.pub, ep: Date.now(), seq: 1 }
+    r.spy({ ...body, sig: await fake.sign(JSON.stringify(body)) } as Msg)
+  }
+  await forge({ t: 'hello', game: null, entries: [], players: [], seated: [], offers: [] })
+  await forge({ t: 'bye' })
+  r.spy({ t: 'bye' } as Msg) // unsigned
+  r.spy(oldHello) // the real host's own words, replayed
+  await settle(); await settle()
+  assert.deepEqual(riva.get().state, real, 'the ledger did not change')
+  assert.equal(riva.get().ended, false, 'nobody but the host can end the session')
+  // a phone that scanned the QR code already knows the key, so even its first hello cannot come from an impostor
+  const scanned = createClient(() => {}, { id: await identity(), host: r.host.key })
+  const body = { t: 'hello', game: null, entries: [], players: [{ id: 'x', name: 'Mallory', color: '#000', accessory: 0, seed: 0 }], seated: [], offers: [], hk: fake.pub, ep: Date.now(), seq: 1 }
+  scanned.receive({ ...body, sig: await fake.sign(JSON.stringify(body)) } as Msg)
+  await settle()
+  assert.equal(scanned.get().heard, false)
+})
+
+test('however many phones say hi, one hello goes out a second, and a late hi still gets one', async () => {
+  const join = wire(), book = memoryBook(), heard: Msg[] = []
+  const host = createHost(book, join(m => host.receive(m)), { id: await identity(), colors: COLORS, accessories: 8, secret: 's', helloMs: 200 })
+  const spy = join(m => heard.push(m))
+  for (let i = 0; i < 20; i++) spy({ t: 'hi', me: `phone${i}` })
+  await settle()
+  assert.equal(heard.filter(m => m.t === 'hello').length, 1, 'the first one now')
+  await new Promise(res => setTimeout(res, 260)); await host.idle(); await settle()
+  assert.equal(heard.filter(m => m.t === 'hello').length, 2, 'and one more once the gap has passed, for the rest')
 })
