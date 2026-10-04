@@ -3,6 +3,17 @@ export type Release = { version: string; date: string; title: string; items: { l
 
 export const RELEASES: Release[] = [
   {
+    version: '1.3.2',
+    date: '2026-10-04',
+    title: 'Big buttons and a trusted host',
+    items: [
+      { lead: 'Tap your dice total', text: 'Under the board on phones and tablets, a big button for each total from 2 to 12 shows the square it lands on. No more aiming for a tiny square.' },
+      { lead: 'Only the real host', text: 'Phones now check that every message comes from the host they joined, from the QR code or the first host they heard. Nobody else can show fake balances or end the session.' },
+      { lead: 'Auctions survive a reload', text: 'If the host screen reloads during an auction, the bidding carries on with the top bid kept.' },
+      { lead: 'Doubles for everyone', text: 'A double now plays its own sound and shows on every screen, so the whole table knows who rolls again.' },
+    ],
+  },
+  {
     version: '1.3.1',
     date: '2026-10-04',
     title: 'Only where you can land',

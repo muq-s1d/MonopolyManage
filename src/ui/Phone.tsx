@@ -10,7 +10,7 @@ import { involves } from './Ledger.tsx'
 import Inbox from './Inbox.tsx'
 import { sfx } from './sound.ts'
 import { ThemeToggle, TurnPanel } from './Table.tsx'
-import BoardMap, { landing } from './BoardMap.tsx'
+import BoardMap, { DicePad, landing } from './BoardMap.tsx'
 import AuctionDock from './Auction.tsx'
 
 const Stage = lazy(() => import('../stage/Stage.tsx'))
@@ -33,9 +33,12 @@ export default function Phone({ live, view, onLeave }: { live: PhoneLive; view: 
   const myTurn = state.turn === me.id && !over && !state.bankrupt[me.id]
   // only the squares this roll or card can reach record a landing; any other square just shows its deed
   const due = landing(game, state, me.id)
+  const pick = (cell: number) => ui.open({ kind: 'cell', cell, landed: !!due.reach && cell in due.reach })
   const board = (
-    <BoardMap game={game} state={state} {...due} highlight={state.pos[me.id]}
-      onPick={cell => ui.open({ kind: 'cell', cell, landed: !!due.reach && cell in due.reach })} />
+    <>
+      <BoardMap game={game} state={state} {...due} highlight={state.pos[me.id]} onPick={pick} />
+      {due.reach && <DicePad game={game} state={state} reach={due.reach} onPick={pick} />}
+    </>
   )
 
   return (

@@ -85,4 +85,6 @@ test('a landing sounds like what happened on the square, not the Go salary on th
   assert.equal(soundFor(wrapped), 'buy')
   assert.equal(soundFor(run(land(g, s, 'b', 5, { do: 'rent' }))), 'rent')
   assert.equal(soundFor(run(land(g, s, 'b', 0))), 'bigCoin', 'landing on Go with nothing else is the salary')
+  const { rollDoubles } = await import('../engine/actions.ts')
+  assert.equal(soundFor(run(rollDoubles(g, s, 'b'))), 'doubles', 'every device hears a double')
 })

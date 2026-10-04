@@ -3,7 +3,7 @@ import { BookOpen, CircleCheck, Dice5, Menu, Moon, Sun, Undo2 } from 'lucide-rea
 import { active, money, nextPlayer } from '../engine/engine.ts'
 import type { Game, State } from '../engine/types.ts'
 import { prefs, store, type Snap } from '../store.ts'
-import BoardMap, { landing } from './BoardMap.tsx'
+import BoardMap, { DicePad, landing } from './BoardMap.tsx'
 import { useUI } from './ctx.ts'
 import { isDark, Money, PhoneMark, readable, Seal, webgl } from './kit.tsx'
 import Inbox from './Inbox.tsx'
@@ -178,8 +178,9 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
   const due = landing(game, state, state.turn)
   // one column (tablets, phones): the board sits in the turn panel, right under "tap where it lands"
   const narrow = useSyncExternalStore(onNarrow, () => narrowQuery.matches)
+  const pick = (cell: number) => ui.open({ kind: 'cell', cell, landed: !!due.reach && cell in due.reach })
   const board = (
-    <BoardMap game={game} state={state} {...due} onPick={cell => ui.open({ kind: 'cell', cell, landed: !!due.reach && cell in due.reach })}
+    <BoardMap game={game} state={state} {...due} onPick={pick}
       stage={webgl ? <Suspense fallback={null}><Stage game={game} state={state} entries={entries} /></Suspense> : undefined} />
   )
 
@@ -213,7 +214,7 @@ export default function Table({ snap }: { snap: NonNullable<Snap> }) {
             <PlayerRail game={game} state={state} />
           </section>
           {ui.live?.kind === 'host' && <HostInbox live={ui.live} game={game} />}
-          <TurnPanel key={`${state.turn}:${turns}`} game={game} state={state} board={narrow ? board : undefined} />
+          <TurnPanel key={`${state.turn}:${turns}`} game={game} state={state} board={narrow ? <>{board}{due.reach && <DicePad game={game} state={state} reach={due.reach} onPick={pick} />}</> : undefined} />
         </div>
         {!narrow && board}
       </main>

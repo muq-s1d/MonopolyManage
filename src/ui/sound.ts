@@ -7,7 +7,7 @@ import { prefs } from '../store.ts'
 export type Sfx =
   | 'coin' | 'bigCoin' | 'jackpot' | 'pay' | 'rent' | 'buy' | 'house' | 'hotel' | 'sell'
   | 'mortgage' | 'unmortgage' | 'jail' | 'free' | 'card' | 'turn' | 'trade' | 'bankrupt'
-  | 'victory' | 'undo' | 'error' | 'tick' | 'shuffle' | 'start' | 'pact'
+  | 'victory' | 'undo' | 'error' | 'tick' | 'shuffle' | 'start' | 'pact' | 'doubles'
 
 type Wave = 'pulse12' | 'pulse25' | 'pulse50' | 'triangle'
 type Voice = { at: number; f: number; d: number; w?: Wave; v?: number; to?: number; vib?: number }
@@ -72,6 +72,11 @@ const SFX: Record<Sfx, () => Voice[]> = {
   error: () => [{ at: 0, f: 140, d: 0.1, w: 'pulse50', v: 0.5 }, { at: 0.13, f: 110, d: 0.16, w: 'pulse50', v: 0.5 }],
   tick: () => [{ at: 0, f: hz('E6'), d: 0.035, w: 'pulse50', v: 0.22 }],
   shuffle: () => Array.from({ length: 9 }, (_, i) => ({ at: i * 0.045, f: hz(['C6', 'G5', 'E6', 'A5', 'D6', 'F5', 'B5', 'E5', 'C6'][i]), d: 0.04, w: 'pulse50' as Wave, v: 0.35 })),
+  // two dice clacking, then a hop up: roll again
+  doubles: () => [
+    { at: 0, f: 1800, d: 0.025, w: 'pulse12', v: 0.4 }, { at: 0.07, f: 1600, d: 0.025, w: 'pulse12', v: 0.4 },
+    ...seq(0.16, [['G5', 0.07], ['G5', 0.07], ['D6', 0.18]], 'pulse25', 0.6),
+  ],
   // two voices answer each other, then land together: a handshake
   pact: () => [
     ...seq(0, [['G5', 0.08], ['C6', 0.14]], 'pulse25', 0.7),
@@ -120,6 +125,7 @@ export function soundFor(e: Entry): Sfx {
   }
   if (has('turn')) return 'turn'
   if (has('moves')) return 'card'
+  if (has('doubles')) return 'doubles'
   if (has('jailCard')) return ops.some(o => o.op === 'jailCard' && o.delta > 0) ? 'card' : 'free'
   const moves = ops.flatMap(o => (o.op === 'transfer' ? [o] : []))
   if (!moves.length) return 'tick'
