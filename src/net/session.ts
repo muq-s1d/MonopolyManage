@@ -17,24 +17,34 @@ export function cleanSteps(x: unknown): number[] | null {
 }
 export type NewPlayer = Pick<Player, 'name' | 'color' | 'accessory'> & { seed?: number }
 
-/**
- * Every message on a session channel. `me` is the sending phone's device id, `to` the device a reply is for.
- * The channel is shared, so nothing secret travels on it: a phone proves who it is by signing (see `Signed`).
- */
-export type Msg =
-  | { t: 'hi'; me: string }
+/** What the host says. Every one goes out stamped and signed by the host (see `Hosted`). */
+export type HostBody =
   | { t: 'hello'; game: Game | null; entries: Entry[]; players: Player[]; seated: string[]; offers: Offer[]; auction?: Auction | null }
-  | Signed<{ t: 'seat'; pub?: JsonWebKey; player?: NewPlayer; host?: string; claim?: string }>
-  | Signed<{ t: 'do'; name: string; args: unknown[] }>
   | { t: 'done'; to: string; id: string; ok?: true; pending?: true; error?: string; pid?: string; admin?: boolean }
-  | Signed<{ t: 'answer'; offer: string; yes: boolean }>
-  | Signed<{ t: 'decide'; offer: string; yes: boolean }>
   | { t: 'offers'; offers: Offer[] }
   | { t: 'auction'; auction: Auction | null }
-  | Signed<{ t: 'bid'; auction: string; amount: number | null }> // null: out of the bidding
   | { t: 'sync'; keep: number; add: Entry[]; n: number }
   | { t: 'say'; pids: string[]; text: string; error?: boolean }
   | { t: 'bye' }
+
+/**
+ * A host message as sent: `hk` is the host's public key, `ep` when this host started and `seq` its running count,
+ * so a phone can refuse anything older than what it has seen; `sig` signs everything else.
+ */
+export type Hosted<T = HostBody> = T extends unknown ? T & { hk: JsonWebKey; ep: number; seq: number; sig: string } : never
+
+/**
+ * Every message on a session channel. `me` is the sending phone's device id, `to` the device a reply is for.
+ * The channel is shared, so nothing secret travels on it and both sides sign: phones their requests, the host its answers.
+ */
+export type Msg =
+  | { t: 'hi'; me: string }
+  | Hosted
+  | Signed<{ t: 'seat'; pub?: JsonWebKey; player?: NewPlayer; host?: string; claim?: string }>
+  | Signed<{ t: 'do'; name: string; args: unknown[] }>
+  | Signed<{ t: 'answer'; offer: string; yes: boolean }>
+  | Signed<{ t: 'decide'; offer: string; yes: boolean }>
+  | Signed<{ t: 'bid'; auction: string; amount: number | null }> // null: out of the bidding
 
 /** A phone's request: `key` names its public key, `sig` signs everything else, `id` and `at` stop a replay. */
 export type Signed<T> = T & { me: string; id: string; key: string; at: number; sig: string }

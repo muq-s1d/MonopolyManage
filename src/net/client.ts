@@ -1,7 +1,7 @@
 import { replay } from '../engine/engine.ts'
 import type { ActionArgs, ActionName } from '../engine/actions.ts'
 import type { Entry, Game, Player, State } from '../engine/types.ts'
-import type { Auction, Identity, Msg, NewPlayer, Offer, Signed } from './session.ts'
+import { verify, type Auction, type Hosted, type Identity, type Msg, type NewPlayer, type Offer, type Signed } from './session.ts'
 
 export type View = {
   game: Game | null
@@ -17,18 +17,20 @@ export type View = {
   ended: boolean
   /** A host has answered at least once. */
   heard: boolean
+  /** The host's key this phone trusts: from the QR code, or the first host it heard. */
+  hostKey: string | null
 }
 export type Reply = { ok?: true; pending?: true; error?: string; who?: string; pid?: string; admin?: boolean }
 
-/** `id`: this device's key pair, which proves every request is really this phone's. */
-type Opts = { id: Identity; me?: string; onSay?: (text: string, error: boolean) => void; timeoutMs?: number }
+/** `id`: this device's key pair, which proves every request is really this phone's. `host`: the host key to trust. */
+type Opts = { id: Identity; host?: string | null; me?: string; onSay?: (text: string, error: boolean) => void; timeoutMs?: number }
 
 export type Client = ReturnType<typeof createClient>
 
 /** A phone's copy of the host's ledger. It never commits anything itself; it asks and waits for the verdict. */
 export function createClient(send: (m: Msg) => void, o: Opts) {
   const me = o.me ?? crypto.randomUUID()
-  let view: View = { game: null, entries: [], state: null, players: [], seated: [], offers: [], auction: null, pid: null, admin: false, ended: false, heard: false }
+  let view: View = { game: null, entries: [], state: null, players: [], seated: [], offers: [], auction: null, pid: null, admin: false, ended: false, heard: false, hostKey: o.host ?? null }
   const waiting = new Map<string, (r: Reply) => void>()
   const subs = new Set<() => void>()
   const set = (patch: Partial<View>) => { view = { ...view, ...patch }; subs.forEach(f => f()) }
@@ -50,33 +52,48 @@ export function createClient(send: (m: Msg) => void, o: Opts) {
   })
   const tell = (b: Body) => void signed(b).then(send)
 
+  function handle(m: Hosted) {
+    switch (m.t) {
+      case 'hello':
+        return set({ game: m.game, entries: m.entries, state: m.game && replay(m.game, m.entries), players: m.players, seated: m.seated, offers: m.offers, auction: local(m.auction), ended: false, heard: true })
+      case 'sync': {
+        // out of step (missed a message, or joined mid-change): ask for everything again
+        if (!view.game || m.keep > view.entries.length) return hi()
+        const entries = [...view.entries.slice(0, m.keep), ...m.add]
+        if (entries.length !== m.n) return hi()
+        return set({ entries, state: replay(view.game, entries) })
+      }
+      case 'offers': return set({ offers: m.offers })
+      case 'auction': return set({ auction: local(m.auction) })
+      case 'done': {
+        if (m.to !== me) return
+        if (m.pid) set({ pid: m.pid, admin: !!m.admin })
+        waiting.get(m.id)?.(m)
+        return void waiting.delete(m.id)
+      }
+      case 'say': return view.pid && (m.pids.includes(view.pid) || view.admin) ? o.onSay?.(m.text, !!m.error) : undefined
+      case 'bye': return set({ ended: true })
+    }
+  }
+  let inbox = Promise.resolve(), last = { ep: 0, seq: 0 }
+
   return {
     me,
     get: () => view,
     subscribe(f: () => void) { subs.add(f); return () => { subs.delete(f) } },
     hi,
+    /** Takes a host message only if the trusted host signed it and it is newer than the last one. */
     receive(m: Msg) {
-      switch (m.t) {
-        case 'hello':
-          return set({ game: m.game, entries: m.entries, state: m.game && replay(m.game, m.entries), players: m.players, seated: m.seated, offers: m.offers, auction: local(m.auction), ended: false, heard: true })
-        case 'sync': {
-          // out of step (missed a message, or joined mid-change): ask for everything again
-          if (!view.game || m.keep > view.entries.length) return hi()
-          const entries = [...view.entries.slice(0, m.keep), ...m.add]
-          if (entries.length !== m.n) return hi()
-          return set({ entries, state: replay(view.game, entries) })
-        }
-        case 'offers': return set({ offers: m.offers })
-        case 'auction': return set({ auction: local(m.auction) })
-        case 'done': {
-          if (m.to !== me) return
-          if (m.pid) set({ pid: m.pid, admin: !!m.admin })
-          waiting.get(m.id)?.(m)
-          return void waiting.delete(m.id)
-        }
-        case 'say': return view.pid && (m.pids.includes(view.pid) || view.admin) ? o.onSay?.(m.text, !!m.error) : undefined
-        case 'bye': return set({ ended: true })
-      }
+      if (!('hk' in m)) return // requests from other phones are not for us
+      inbox = inbox.then(async () => {
+        const { sig, ...body } = m, pinned = view.hostKey
+        if (pinned ? m.hk.x !== pinned : m.t !== 'hello') return // trust on first use: only a hello introduces a host
+        if (m.ep < last.ep || (m.ep === last.ep && m.seq <= last.seq)) return // a replay, or out of date
+        if (!(await verify(m.hk, JSON.stringify(body), sig))) return
+        last = { ep: m.ep, seq: m.seq }
+        if (!pinned) set({ hostKey: m.hk.x! })
+        handle(m)
+      })
     },
     /** Take a new seat before the start, or reclaim this device's seat. `host` is the host phone's one-time secret. */
     seat: (player?: NewPlayer, host?: string) => ask({ t: 'seat', pub: o.id.pub, player, host }),

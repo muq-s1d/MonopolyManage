@@ -35,7 +35,7 @@ function CodeStep() {
         throw new Error(`No session with the code ${c} is running. Check the code on the host screen.`)
       }
       // a saved seat for this code is reclaimed without asking again
-      if (sessions.phone()?.code === c && (await live.client.seat()).error) sessions.savePhone(null)
+      if (sessions.phone()?.code === c && sessions.phone()?.seated && (await live.client.seat()).error) sessions.savePhone({ code: c, host: live.client.get().hostKey ?? undefined })
       sfx('start')
       ui.setLive(live)
     } catch (e) {
@@ -222,7 +222,8 @@ const qr = (text: string) => renderSVG(text, { border: 1, whiteColor: '#FBF6E9',
 export function HostPanel({ live }: { live: HostLive }) {
   const [where, setWhere] = useState<'screen' | 'phone' | 'none'>('screen')
   const secret = useSyncExternalStore(live.subscribe, () => live.host.secret) // used once, then replaced
-  const base = `${location.origin}${location.pathname}#join=${live.code}`
+  // the link carries the host's key, so a phone that scans it trusts only this host
+  const base = `${location.origin}${location.pathname}#join=${live.code}&k=${live.host.key}`
   const code = useMemo(() => qr(base), [base])
   const mine = useMemo(() => qr(`${base}&host=${secret}`), [base, secret])
   return (

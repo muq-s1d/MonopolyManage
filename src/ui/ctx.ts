@@ -35,10 +35,13 @@ export type UI = {
   me: string | null
 }
 
-/** `#join=KQZMT`, from the QR code on the host screen. The host's own phone also carries `&host=<secret>`. */
+/**
+ * `#join=KQZMT&k=<host key>`, from the QR code on the host screen: the code, and the host key the phone should trust.
+ * The host's own phone also carries `&host=<secret>`.
+ */
 export const joinLink = () => {
-  const m = /^#join=([A-Za-z]{5})(?:&host=([\w-]+))?/.exec(location.hash)
-  return m ? { code: m[1].toUpperCase(), host: m[2] } : null
+  const p = new URLSearchParams(location.hash.slice(1)), code = p.get('join')
+  return code && /^[A-Za-z]{5}$/.test(code) ? { code: code.toUpperCase(), host: p.get('host') ?? undefined, key: p.get('k') ?? undefined } : null
 }
 
 export const UICtx = createContext<UI>(null!)

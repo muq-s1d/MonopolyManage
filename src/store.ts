@@ -62,9 +62,9 @@ export const store = {
 export const useSnap = () => useSyncExternalStore(store.subscribe, () => snap)
 
 /** The session a host is running for the saved game, so a reload reopens the same room. */
-type SessionRecord = Seats & { code: string; game: string }
-/** The session this phone holds a seat in; its device key reclaims the seat. */
-type PhoneRecord = { code: string }
+type SessionRecord = Seats & { code: string; game: string; hostKey?: JsonWebKey }
+/** The session this phone last joined: the host key it trusts there, and whether it holds a seat (its device key reclaims it). */
+type PhoneRecord = { code: string; host?: string; seated?: boolean }
 export const sessions = {
   host: () => { const r = read<SessionRecord | null>(SESSION, null); return r && r.game === snap?.game.id ? r : null },
   saveHost: (r: SessionRecord | null) => (r ? write(SESSION, r) : drop(SESSION)),
