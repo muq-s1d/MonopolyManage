@@ -33,6 +33,16 @@ The stage in the middle of the board shows whose turn it is (the creature in the
 
 ![Banknote paper theme](docs/table-light.jpg)
 
+## The Android app
+
+New in 1.4. On an Android phone, tap **Get the Android app** in the lobby, or download `the-counting-house.apk` from the [release page](https://github.com/muq-s1d/MonopolyManage/releases), and install it from the file (Android asks once to allow installs from your browser). There is no store listing. The app opens this site full screen, so every release of the site reaches it by itself; if the app shell ever changes, the lobby offers the new download. It needs Chrome and the internet.
+
+To build it: `cd android && npm install && npm run build`. It needs a JDK 17 and the Android SDK, and signs with the key in `~/.config/counting-house`, which every update must keep using.
+
+## The end of the game
+
+The standings name the landlord, the big spender, the biggest payday, who passed Go most and who went to jail most, and draw each player's net worth round by round on one shared scale.
+
 ## Deals between players
 
 New in 1.1. Open **Deals** on the table for four kinds of agreement:
@@ -56,6 +66,7 @@ New in 1.2. Tap **Host a session** in the lobby. The host screen becomes the big
 
 ![Seating a session: the QR code, the code, and players joining from their phones](docs/session-setup.jpg)
 
+- **Just watch.** A phone or a TV can join without a seat and follow the board, everyone's money and every moment.
 - **Your own dashboard.** Each phone shows only that player: their creature, cash, net worth, the turn buttons on their turn, and building, mortgaging, payments and deals at any time. Everyone else's money is on the host screen.
 - **You pay your own rent.** The player who landed taps Pay. The payer sees and hears money going out, the owner hears it coming in, and the host screen shows the table what happened.
 - **The host approves the risky things.** Trades, pacts, loans and free rent passes go to the other player first, then to the host. Undo, bankruptcy and money from the bank or other players wait for the host alone.

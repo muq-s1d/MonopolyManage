@@ -1,0 +1,8 @@
+{
+  "name": "counting-house-apk",
+  "private": true,
+  "type": "module",
+  "description": "Builds the Android app: a Trusted Web Activity that opens the live site full screen.",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": { "@bubblewrap/core": "1.25.0" }
+}
