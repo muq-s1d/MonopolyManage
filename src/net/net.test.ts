@@ -8,10 +8,10 @@ import { auctionProblem, gate } from './rules.ts'
 import { run } from '../engine/actions.ts'
 import { createHost, type Book } from './host.ts'
 import { createClient } from './client.ts'
-import type { Msg } from './session.ts'
+import { identity, type Identity, type Msg } from './session.ts'
 
 const US = presets[0]
-const idx = (name: string) => US.cells.findIndex(c => c.name === name)
+const idx = (name: string, nth = 1) => US.cells.flatMap((c, i) => (c.name === name ? [i] : []))[nth - 1]
 const COLORS = ['#c00', '#0c0', '#00c']
 
 // ---------- permission table ----------
@@ -31,28 +31,37 @@ test('permission table, each case checked by hand', () => {
   const { g, s, commit } = table()
   const med = idx('Mediterranean Avenue'), baltic = idx('Baltic Avenue')
   commit(E.buy(g, s(), 'otto', med))
-  // riva's turn: she records her own landing, never otto's, and cleo must wait
-  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', med, { do: 'rent' }]), { gate: 'now' })
-  assert.deepEqual(gate(g, s(), 'riva', 'land', ['otto', med, { do: 'rent' }]), { error: 'That is another player’s move' })
-  assert.deepEqual(gate(g, s(), 'cleo', 'land', ['cleo', med, { do: 'rent' }]), { error: 'Wait for your turn' })
+  const income = idx('Income Tax'), oriental = idx('Oriental Avenue'), chest = idx('Community Chest', 2)
+  // riva's turn from Go: she records her own landing, never otto's, and cleo must wait
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', income, { do: 'tax' }]), { gate: 'now' })
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['otto', income, { do: 'tax' }]), { error: 'That is another player’s move' })
+  assert.deepEqual(gate(g, s(), 'cleo', 'land', ['cleo', income, { do: 'tax' }]), { error: 'Wait for your turn' })
+  // only squares a roll of 2 to 12 reaches: Mediterranean is one step from Go, Boardwalk far away
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', med, { do: 'rent' }]), { error: 'Your piece cannot get there from where it stands' })
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', idx('Boardwalk'), { do: 'buy' }]), { error: 'Your piece cannot get there from where it stands' })
   // landings go through land, so they count against the roll
   assert.deepEqual(gate(g, s(), 'riva', 'payRent', ['riva', med]), { error: 'Tap the square you landed on to record it' })
   assert.deepEqual(gate(g, s(), 'riva', 'buy', ['riva', baltic]), { error: 'Tap the square you landed on to buy it' })
   assert.deepEqual(gate(g, s(), 'riva', 'passGo', ['riva']), { gate: 'host' }, 'Go is paid with the landing; a claim is a correction')
   assert.deepEqual(gate(g, s(), 'riva', 'endTurn', []), { error: 'Tap the square you landed on first' })
   // one landing per roll: once it is recorded, another needs doubles, or the host
-  commit(run(g, s(), 'land', 'riva', baltic))
-  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', baltic, { do: 'buy' }]), { error: 'That roll is already recorded. If it was the wrong square, ask the host to undo it.' })
+  commit(run(g, s(), 'land', 'riva', oriental))
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', idx('Vermont Avenue'), { do: 'buy' }]), { error: 'That roll is already recorded. If it was the wrong square, ask the host to undo it.' })
   assert.deepEqual(gate(g, s(), 'riva', 'endTurn', []), { gate: 'now' })
   // auctions run live on the host; the old record-the-winner request is refused
-  assert.deepEqual(gate(g, s(), 'riva', 'buy', ['otto', baltic, 10]), { error: 'Auctions run live: tap Auction it' })
-  assert.equal(auctionProblem(g, s(), 'riva', baltic), null, 'riva stands on unowned Baltic')
-  assert.equal(auctionProblem(g, s(), 'otto', baltic), 'Only the player who landed there can auction it')
-  assert.equal(auctionProblem(g, s(), 'riva', idx('Boardwalk')), 'Auction the square you are standing on')
+  assert.deepEqual(gate(g, s(), 'riva', 'buy', ['otto', oriental, 10]), { error: 'Auctions run live: tap Auction it' })
+  assert.equal(auctionProblem(g, s(), 'riva', oriental), null, 'riva just landed on unowned Oriental')
+  assert.equal(auctionProblem(g, s(), 'otto', oriental), 'Only the player who landed there can auction it')
+  assert.equal(auctionProblem(g, s(), 'riva', idx('Boardwalk')), 'Auction the square you just landed on')
   commit(run(g, s(), 'rollDoubles', 'riva'))
-  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', idx('Chance'), { do: 'card', card: US.chance[0] }]), { gate: 'now' }, 'doubles give another landing')
+  assert.equal(auctionProblem(g, s(), 'riva', oriental), 'Auction the square you just landed on', 'not after rolling on')
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', chest, { do: 'card', card: US.chest[0] }]), { gate: 'now' }, 'doubles give another landing, 11 on from Oriental')
   // the engine checks the card comes from the deck of the square
-  assert.equal((run(g, s(), 'land', 'riva', idx('Chance'), { do: 'card', card: { title: 'Free money', effect: { type: 'collect', amount: 1e6 } } }) as { error: string }).error, 'That card is not in this deck')
+  assert.equal((run(g, s(), 'land', 'riva', chest, { do: 'card', card: { title: 'Free money', effect: { type: 'collect', amount: 1e6 } } }) as { error: string }).error, 'That card is not in this deck')
+  // a card that names a square allows that square only
+  commit(run(g, s(), 'land', 'riva', chest, { do: 'card', card: US.chest.find(c => c.effect.type === 'advance')! }))
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', idx('Vermont Avenue'), { do: 'buy' }]), { error: 'Your piece cannot get there from where it stands' })
+  assert.deepEqual(gate(g, s(), 'riva', 'land', ['riva', 0, { do: 'none' }]), { gate: 'now' }, 'Advance to Go')
   // money: paying out of your own pocket is fine, taking it needs the host
   assert.deepEqual(gate(g, s(), 'cleo', 'transfer', ['cleo', 'bank', 10, '']), { gate: 'now' })
   assert.deepEqual(gate(g, s(), 'cleo', 'transfer', ['bank', 'cleo', 10, '']), { gate: 'host' })
@@ -96,41 +105,45 @@ function wire() {
     }
   }
 }
-const settle = () => new Promise(r => setTimeout(r, 5))
+const settle = () => new Promise(r => setTimeout(r, 20))
 
 function room() {
   const join = wire(), book = memoryBook()
   const said: string[] = []
-  const host = createHost(book, join(m => host.receive(m)), { colors: COLORS, accessories: 8, secret: 's3cret', auctionMs: { open: 60, bid: 40 } })
-  const phone = (token?: string) => {
-    const c = createClient(join(m => c.receive(m)), { token, onSay: t => said.push(t), timeoutMs: 500 })
+  const host = createHost(book, join(m => host.receive(m)), { colors: COLORS, accessories: 8, secret: 's3cret', auctionMs: { open: 400, bid: 300 } })
+  const phone = async (id?: Identity) => {
+    const c = createClient(join(m => c.receive(m)), { id: id ?? await identity(), onSay: t => said.push(t), timeoutMs: 500 })
     return c
   }
-  return { host, book, phone, said }
+  // an eavesdropper on the channel: hears every message, and can send anything
+  const heard: Msg[] = []
+  const spy = join(m => heard.push(m))
+  return { host, book, phone, said, heard, spy }
 }
 
 test('joining, colour clash, and reclaiming a seat', async () => {
   const { host, phone } = room()
-  const riva = phone(), otto = phone()
+  const key = await identity()
+  const riva = await phone(key), otto = await phone()
   const r = await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 2 })
-  assert.ok(r.ok && r.pid && r.token)
+  assert.ok(r.ok && r.pid)
   assert.equal((await otto.seat({ name: 'Otto', color: COLORS[0], accessory: 1 })).error, 'That colour was just taken')
   assert.equal((await otto.seat({ name: 'riva', color: COLORS[1], accessory: 1 })).error, 'Someone is already called riva')
   assert.ok((await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 1 })).ok)
   await settle()
   assert.deepEqual(otto.get().players.map(p => p.name), ['Riva', 'Otto'], 'every phone sees the lobby')
-  // a reloaded phone comes back with its saved token and gets the same seat, even after the start
+  // a reloaded phone comes back with its saved key and gets the same seat, even after the start
   host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: host.players })
-  const again = phone(r.token)
+  const again = await phone(await identity(key.jwk))
   const back = await again.seat()
   assert.equal(back.pid, r.pid)
-  assert.equal((await phone().seat({ name: 'Late', color: COLORS[2], accessory: 0 })).error, 'This game has already started. Ask the host to seat you.')
-  assert.equal((await phone('forged').seat()).error, 'That seat is gone. Join again.')
+  assert.equal((await (await phone()).seat({ name: 'Late', color: COLORS[2], accessory: 0 })).error, 'This game has already started. Ask the host to seat you.')
+  assert.equal((await (await phone()).seat()).error, 'Pick a name, colour and creature first.', 'a stranger’s key holds no seat')
 })
 
 async function started() {
   const r = room()
-  const riva = r.phone(), otto = r.phone()
+  const riva = await r.phone(), otto = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 1 })
   r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
@@ -142,7 +155,7 @@ const same = (a: State | null, b: State | null) => assert.deepEqual(a, b, 'repli
 
 test('an intent commits and every replica matches the host', async () => {
   const { book, riva, otto, R, O } = await started()
-  const med = idx('Mediterranean Avenue')
+  const med = idx('Baltic Avenue')
   assert.equal(book.get()!.state.turn, R)
   assert.equal((await otto.act('land', O, med, { do: 'buy' })).error, 'Wait for your turn')
   assert.ok((await riva.act('land', R, med, { do: 'buy' })).ok)
@@ -151,16 +164,16 @@ test('an intent commits and every replica matches the host', async () => {
   assert.ok((await otto.act('land', O, med, { do: 'rent' }, undefined)).ok, 'an omitted optional argument keeps its default over JSON')
   await settle()
   const s = book.get()!.state
-  assert.equal(s.cash[R], 1500 - 60 + 2)
-  assert.equal(s.cash[O], 1500 - 2)
-  assert.equal(book.get()!.entries[2].memo, 'Otto paid Riva $2 rent on Mediterranean Avenue. Base rent on Mediterranean Avenue.')
+  assert.equal(s.cash[R], 1500 - 60 + 4)
+  assert.equal(s.cash[O], 1500 - 4)
+  assert.equal(book.get()!.entries[2].memo, 'Otto paid Riva $4 rent on Baltic Avenue. Base rent on Baltic Avenue.')
   same(riva.get().state, s)
   same(otto.get().state, s)
 })
 
 test('a trade is accepted, approved, and a stale one is refused with the reason', async () => {
   const { host, book, riva, otto, R, O, said } = await started()
-  const med = idx('Mediterranean Avenue'), baltic = idx('Baltic Avenue')
+  const med = idx('Baltic Avenue'), baltic = idx('Oriental Avenue')
   await riva.act('land', R, med, { do: 'buy' })
   await riva.act('endTurn')
   await otto.act('land', O, baltic, { do: 'buy' })
@@ -168,7 +181,7 @@ test('a trade is accepted, approved, and a stale one is refused with the reason'
   assert.ok((await riva.act('trade', R, O, side([med]), side([baltic], 10))).pending)
   await settle()
   const offer = otto.get().offers[0]
-  assert.equal(offer.memo, 'Riva and Otto made a trade. Riva gets Baltic Avenue and $10. Otto gets Mediterranean Avenue.')
+  assert.equal(offer.memo, 'Riva and Otto made a trade. Riva gets Oriental Avenue and $10. Otto gets Baltic Avenue.')
   assert.equal(host.decide(offer.id, true), 'Wait until everyone involved has said yes')
   otto.answer(offer.id, true)
   await settle()
@@ -193,10 +206,10 @@ test('a trade is accepted, approved, and a stale one is refused with the reason'
 
 test('undo, once the host approves, rewinds every replica', async () => {
   const { host, book, riva, otto, R } = await started()
-  await riva.act('land', R, idx('Mediterranean Avenue'), { do: 'buy' })
+  await riva.act('land', R, idx('Baltic Avenue'), { do: 'buy' })
   assert.ok((await riva.undo()).pending)
   await settle()
-  assert.equal(host.offers[0].memo, 'Undo: Riva bought Mediterranean Avenue for $60')
+  assert.equal(host.offers[0].memo, 'Undo: Riva bought Baltic Avenue for $60')
   host.decide(host.offers[0].id, true)
   await settle()
   assert.equal(book.get()!.entries.length, 0)
@@ -206,7 +219,7 @@ test('undo, once the host approves, rewinds every replica', async () => {
 
 test('a new phone takes an existing seat once the host agrees', async () => {
   const { host, phone, otto, O } = await started()
-  const spare = phone()
+  const spare = await phone()
   await spare.act('endTurn').then(r => assert.equal(r.error, 'This phone has no seat'))
   const r = await spare.claim(O)
   assert.ok(r.pending)
@@ -220,7 +233,7 @@ test('a new phone takes an existing seat once the host agrees', async () => {
 
 test('the host’s own phone can approve; other phones cannot', async () => {
   const r = room()
-  const boss = r.phone(), riva = r.phone()
+  const boss = await r.phone(), riva = await r.phone()
   assert.equal((await boss.seat({ name: 'Boss', color: COLORS[0], accessory: 0 }, 's3cret')).admin, true)
   assert.equal((await riva.seat({ name: 'Riva', color: COLORS[1], accessory: 0 }, 'guess')).admin, false)
   r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
@@ -239,7 +252,7 @@ test('the host’s own phone can approve; other phones cannot', async () => {
 
 test('a deal with a player who has no phone waits only for the host', async () => {
   const r = room()
-  const riva = r.phone(), otto = r.phone()
+  const riva = await r.phone(), otto = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
   // the host seats Ada by hand and plays her turns on the big screen
@@ -247,7 +260,7 @@ test('a deal with a player who has no phone waits only for the host', async () =
   r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
   await settle()
   const R = riva.get().pid!, O = otto.get().pid!
-  const med = idx('Mediterranean Avenue')
+  const med = idx('Baltic Avenue')
   await riva.act('land', R, med, { do: 'buy' })
   const side = (cells: number[], cash = 0) => ({ cells, cash, jailCards: 0 })
   assert.ok((await riva.act('trade', R, 'ada', side([med]), side([], 50))).pending)
@@ -269,7 +282,7 @@ test('a phone that missed a sync asks again and catches up', async () => {
   const { book, riva, otto, R } = await started()
   const lost = otto.receive
   otto.receive = () => {} // otto's link drops for a moment
-  await riva.act('land', R, idx('Mediterranean Avenue'), { do: 'buy' })
+  await riva.act('land', R, idx('Baltic Avenue'), { do: 'buy' })
   await riva.act('rollDoubles', R)
   otto.receive = lost
   await riva.act('land', R, idx('Vermont Avenue'))
@@ -280,14 +293,14 @@ test('a phone that missed a sync asks again and catches up', async () => {
 
 test('a live auction: steps set by the auctioneer, bids from phones and for a phoneless player, the top bid wins', async () => {
   const r = room()
-  const riva = r.phone(), otto = r.phone()
+  const riva = await r.phone(), otto = await r.phone()
   await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
   await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
   r.host.setPlayers([...r.host.players, { id: 'ada', name: 'Ada', color: COLORS[2], accessory: 0, seed: 1 }])
   r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
   await settle()
   const R = riva.get().pid!, O = otto.get().pid!, baltic = idx('Baltic Avenue')
-  assert.equal((await riva.startAuction(baltic, [10, 20])).error, 'Auction the square you are standing on', 'first she has to land there')
+  assert.equal((await riva.startAuction(baltic, [10, 20])).error, 'Auction the square you just landed on', 'first she has to land there')
   await riva.act('land', R, baltic)
   assert.equal((await otto.startAuction(baltic, [10])).error, 'Only the player who landed there can auction it')
   assert.equal((await riva.startAuction(baltic, [0])).error, 'Pick one to four bid steps between 1 and 1,000')
@@ -316,7 +329,69 @@ test('a live auction: steps set by the auctioneer, bids from phones and for a ph
   r.book.commit(E.endTurn(s.game, s.state))
   await otto.act('land', O, idx('Oriental Avenue'))
   assert.ok((await otto.startAuction(idx('Oriental Avenue'), [10])).ok)
-  await new Promise(res => setTimeout(res, 120))
+  await new Promise(res => setTimeout(res, 600))
   assert.equal(r.book.get()!.state.owner[idx('Oriental Avenue')], null)
   assert.ok(r.said.includes('Nobody bid on Oriental Avenue. It stays with the bank.'))
+})
+
+test('an eavesdropper cannot act as another player: tampered, replayed and forged messages are dropped', async () => {
+  const r = room()
+  const riva = await r.phone(), otto = await r.phone()
+  await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
+  await otto.seat({ name: 'Otto', color: COLORS[1], accessory: 0 })
+  r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
+  await settle()
+  const R = riva.get().pid!, O = otto.get().pid!
+  assert.ok(!JSON.stringify(r.heard).includes('"token"'), 'no secret seat token travels on the channel')
+  // riva pays the bank 10; the spy copies her signed message
+  assert.ok((await riva.act('transfer', R, 'bank', 10, 'fine')).ok)
+  const signed = r.heard.find(m => m.t === 'do' && m.name === 'transfer')!
+  const cash = () => r.book.get()!.state.cash
+  // 1. replay it: the host has seen that id
+  r.spy(signed); await settle(); await r.host.idle()
+  assert.equal(cash()[R], 1490, 'a replay is ignored')
+  // 2. change it to pay the spy's friend: the signature no longer matches
+  r.spy({ ...signed, id: crypto.randomUUID(), args: [R, O, 1000, 'gift'] } as Msg); await settle(); await r.host.idle()
+  assert.equal(cash()[R], 1490, 'a tampered message is ignored')
+  // 3. sign it with another key but claim riva's: the stored key does not match
+  const evil = await identity()
+  const body = { t: 'do', name: 'transfer', args: [R, O, 1000, 'gift'], me: 'x', id: crypto.randomUUID(), key: (signed as { key: string }).key, at: Date.now() }
+  r.spy({ ...body, sig: await evil.sign(JSON.stringify(body)) } as Msg); await settle(); await r.host.idle()
+  assert.equal(cash()[R], 1490, 'a forged signature is ignored')
+  assert.equal(cash()[O], 1500)
+})
+
+test('the host phone code works once, numbers must be whole, and requests are capped', async () => {
+  const r = room()
+  const boss = await r.phone(), riva = await r.phone(), copycat = await r.phone()
+  assert.equal((await boss.seat({ name: 'Boss', color: COLORS[0], accessory: 0 }, 's3cret')).admin, true)
+  assert.notEqual(r.host.secret, 's3cret', 'the secret changed once used')
+  assert.equal((await copycat.seat({ name: 'Copy', color: COLORS[2], accessory: 0 }, 's3cret')).admin, false, 'a copied host code is worthless')
+  await riva.seat({ name: 'Riva', color: COLORS[1], accessory: 0 })
+  r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
+  await settle()
+  const B = boss.get().pid!, R = riva.get().pid!
+  // money sent as text would turn a balance into a string: the host refuses it
+  assert.equal((await boss.act('trade', B, R, { cells: [], cash: '100' as never, jailCards: 0 }, { cells: [], cash: 0, jailCards: 0 })).error, 'That request did not make sense')
+  assert.equal((await boss.act('trade', B, R, { cells: [], cash: 0.5, jailCards: 0 }, { cells: [], cash: 0, jailCards: 0 })).error, 'That request did not make sense')
+  // five waiting requests at most per player
+  for (let i = 0; i < 5; i++) assert.ok((await riva.act('transfer', 'bank', R, 1, 'please')).pending)
+  assert.equal((await riva.act('transfer', 'bank', R, 1, 'please')).error, 'You have five requests waiting. Wait for answers first.')
+})
+
+test('a long ledger reaches a new phone in slices under the broadcast limit', async () => {
+  const r = room()
+  const riva = await r.phone()
+  await riva.seat({ name: 'Riva', color: COLORS[0], accessory: 0 })
+  r.host.setPlayers([...r.host.players, { id: 'ada', name: 'Ada', color: COLORS[1], accessory: 0, seed: 1 }])
+  r.host.start({ id: 'g', createdAt: 0, board: US, rules: E.defaultRules, players: r.host.players })
+  for (let i = 0; i < 700; i++) { const s = r.book.get()!; r.book.commit(E.transfer(s.game, s.state, 'ada', 'bank', 1, `fee ${i}`) as Entry) }
+  await settle()
+  const late = await r.phone()
+  r.heard.length = 0
+  late.hi(); await settle()
+  assert.equal(late.get().entries.length, 700)
+  assert.deepEqual(late.get().state, r.book.get()!.state)
+  const biggest = Math.max(...r.heard.map(m => JSON.stringify(m).length))
+  assert.ok(biggest < 256_000, `largest message ${biggest} bytes`)
 })

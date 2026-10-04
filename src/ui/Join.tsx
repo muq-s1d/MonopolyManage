@@ -35,7 +35,7 @@ function CodeStep() {
         throw new Error(`No session with the code ${c} is running. Check the code on the host screen.`)
       }
       // a saved seat for this code is reclaimed without asking again
-      if (live.client.get().token && (await live.client.seat()).error) sessions.savePhone(null)
+      if (sessions.phone()?.code === c && (await live.client.seat()).error) sessions.savePhone(null)
       sfx('start')
       ui.setLive(live)
     } catch (e) {
@@ -202,7 +202,7 @@ function ClaimStep({ live }: { live: PhoneLive }) {
       <h1 className="display">The game has started</h1>
       {asked ? <p>Asked the host to seat this phone as {players.find(p => p.id === asked)?.name}. Waiting for a yes…</p> : (
         <>
-          <p className="muted">The game has started. Pick your seat and the host lets this phone in.</p>
+          <p className="muted">Pick your seat. The host lets this phone in.</p>
           <ul className="claim-list">
             {players.map(p => (
               <li key={p.id}><button className="ghost" onClick={() => claim(p.id)}><Seal player={p} size={28} initial={false} /> I am {p.name}</button></li>
@@ -221,9 +221,10 @@ const qr = (text: string) => renderSVG(text, { border: 1, whiteColor: '#FBF6E9',
 
 export function HostPanel({ live }: { live: HostLive }) {
   const [where, setWhere] = useState<'screen' | 'phone' | 'none'>('screen')
+  const secret = useSyncExternalStore(live.subscribe, () => live.host.secret) // used once, then replaced
   const base = `${location.origin}${location.pathname}#join=${live.code}`
   const code = useMemo(() => qr(base), [base])
-  const mine = useMemo(() => qr(`${base}&host=${live.secret}`), [base, live.secret])
+  const mine = useMemo(() => qr(`${base}&host=${secret}`), [base, secret])
   return (
     <section className="host-panel" aria-label="How players join">
       <div className="qr" role="img" aria-label={`QR code that opens ${base}`} dangerouslySetInnerHTML={{ __html: code }} />

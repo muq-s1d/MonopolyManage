@@ -1,13 +1,13 @@
-import { lazy, Suspense, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { CircleHelp, Monitor, Smartphone } from 'lucide-react'
 import { sessions, store, useSnap } from '../store.ts'
 import { useUI } from './ctx.ts'
-import { Seal, webgl } from './kit.tsx'
+import { reducedMotion, Seal, webgl } from './kit.tsx'
 import { NewsPill } from './WhatsNew.tsx'
 
-// the WebGL coil round How to use loads after the page, and never for reduced motion or without WebGL
+// the WebGL coil round How to use pulls in the 3D chunk (about 270 KB), so it waits until the page is idle,
+// and never loads for reduced motion, without WebGL, or with Data Saver on
 const Coil = lazy(() => import('../stage/Coil.tsx'))
-const still = matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const ready = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_KEY
 const NOT_SET_UP = 'Sessions are not set up on this copy of the site. Everything else works as usual.'
@@ -19,6 +19,13 @@ export default function Lobby() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const guide = useRef<HTMLButtonElement>(null)
+  const [coil, setCoil] = useState(false)
+  useEffect(() => {
+    if (!webgl || reducedMotion.matches || (navigator as { connection?: { saveData?: boolean } }).connection?.saveData) return
+    const later = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500))
+    const id = later(() => setCoil(true), { timeout: 3000 })
+    return () => (window.cancelIdleCallback ?? clearTimeout)(id)
+  }, [])
   const saved = snap ? sessions.host() : null
   const seat = sessions.phone()
 
@@ -43,7 +50,7 @@ export default function Lobby() {
   return (
     <main className="lobby">
       <div className="lobby-burst sunburst" aria-hidden="true" />
-      {webgl && !still && <Suspense fallback={null}><Coil target={guide} /></Suspense>}
+      {coil && <Suspense fallback={null}><Coil target={guide} /></Suspense>}
       <section className="lobby-card">
         <p className="eyebrow">Est. at your kitchen table</p>
         <h1 className="display lobby-title">The Counting House</h1>

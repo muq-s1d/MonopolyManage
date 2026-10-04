@@ -2,12 +2,12 @@ import { sessions, store } from '../store.ts'
 import { ACCESSORIES, PLAYER_COLORS } from '../ui/kit.tsx'
 import { createClient, type Client } from './client.ts'
 import { createHost, type Host } from './host.ts'
-import { awake, connect, newCode, type Link, type Msg } from './session.ts'
+import { awake, connect, identity, newCode, type Link, type Msg } from './session.ts'
 
 /** Connection state both sides show: is the link up, and which devices are on the channel. */
 type Wire = { up: boolean; present: string[]; since: number }
 type Base = { code: string; wire: () => Wire; subscribe: (f: () => void) => () => void; close: () => void }
-export type HostLive = Base & { kind: 'host'; host: Host; secret: string }
+export type HostLive = Base & { kind: 'host'; host: Host }
 export type PhoneLive = Base & { kind: 'phone'; client: Client }
 export type Live = HostLive | PhoneLive
 
@@ -41,31 +41,28 @@ export async function hostSession(resume: boolean): Promise<HostLive> {
   let l: Link | null = null
   const host: Host = createHost(store, m => void l?.send(m), {
     colors: PLAYER_COLORS.map(c => c.hex), accessories: ACCESSORIES.length, secret, resume: saved ?? undefined,
-    onChange: () => { const g = store.get(); if (host?.started && g) sessions.saveHost({ code, secret, game: g.game.id, ...host.save() }) },
+    onChange: () => { const g = store.get(); if (host?.started && g) sessions.saveHost({ code, game: g.game.id, ...host.save() }) },
   })
   l = await link(code, HOST_DEVICE, m => host.receive(m), w, () => host.announce())
   host.announce()
   const off = host.subscribe(() => w.set({}))
   return {
-    kind: 'host', code, secret, host, wire: w.get, subscribe: w.subscribe,
+    kind: 'host', code, host, wire: w.get, subscribe: w.subscribe,
     close: () => { off(); host.close(); sessions.saveHost(null); setTimeout(() => l?.close(), 500) },
   }
 }
 
 /** Joins as a phone. A saved seat for this code is reclaimed straight away. */
 export async function phoneSession(code: string, onSay: (text: string, error: boolean) => void): Promise<PhoneLive> {
-  const saved = sessions.phone()
+  // one key pair per device, kept across sessions: it is how this phone gets its seat back after a reload
+  const id = await identity(sessions.key())
+  sessions.saveKey(id.jwk)
   const w = wiring()
   let l: Link | null = null
-  const client = createClient(m => void l?.send(m), { token: saved?.code === code ? saved.token : undefined, onSay })
+  const client = createClient(m => void l?.send(m), { id, onSay })
   let hostWasHere = false
   l = await link(code, client.me, m => client.receive(m), w, () => client.hi())
-  // the host coming back after a reload re-announces, but ask anyway in case we missed it
-  let token = client.get().token
-  const offSeat = client.subscribe(() => {
-    const t = client.get().token
-    if (t && t !== token) sessions.savePhone({ code, token: (token = t) })
-  })
+  const offSeat = client.subscribe(() => { if (client.get().pid && sessions.phone()?.code !== code) sessions.savePhone({ code }) })
   const off = w.subscribe(() => {
     const here = w.get().present.includes(HOST_DEVICE)
     if (here && !hostWasHere) client.hi()

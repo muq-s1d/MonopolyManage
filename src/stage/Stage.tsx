@@ -1,35 +1,21 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer } from '@react-three/drei'
 import * as THREE from 'three'
 import { groupCells, money } from '../engine/engine.ts'
 import type { Entry, Game, State } from '../engine/types.ts'
 import Creature, { type Reaction } from './Creature.tsx'
+import { isDark, reducedMotion } from '../ui/kit.tsx'
 
-export const reducedQuery = matchMedia('(prefers-reduced-motion: reduce)')
-export function useReduced() {
-  const [r, setR] = useState(reducedQuery.matches)
-  useEffect(() => {
-    const f = () => setR(reducedQuery.matches)
-    reducedQuery.addEventListener('change', f)
-    return () => reducedQuery.removeEventListener('change', f)
-  }, [])
-  return r
-}
+const onReduced = (f: () => void) => { reducedMotion.addEventListener('change', f); return () => reducedMotion.removeEventListener('change', f) }
+export const useReduced = () => useSyncExternalStore(onReduced, () => reducedMotion.matches)
 
-export function useDarkTheme() {
-  const read = () => {
-    const t = document.documentElement.dataset.theme
-    return t ? t === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches
-  }
-  const [dark, setDark] = useState(read)
-  useEffect(() => {
-    const mo = new MutationObserver(() => setDark(read()))
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => mo.disconnect()
-  }, [])
-  return dark
+const onTheme = (f: () => void) => {
+  const mo = new MutationObserver(f)
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  return () => mo.disconnect()
 }
+export const useDarkTheme = () => useSyncExternalStore(onTheme, isDark)
 
 /** Up to five creatures stand on one arc; six or more split into a front row and a raised back step. */
 export function layout(n: number) {

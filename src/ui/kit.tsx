@@ -5,6 +5,9 @@ import type { HostLive } from '../net/live.ts'
 import { sfx } from './sound.ts'
 
 export const webgl = (() => { try { return !!document.createElement('canvas').getContext('webgl2') } catch { return false } })()
+export const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
+/** The felt (dark) theme: chosen in the menu, or the device's own setting. */
+export const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : !matchMedia('(prefers-color-scheme: light)').matches }
 
 export const PLAYER_COLORS = [
   { name: 'Garnet', hex: '#B83A4B' }, { name: 'Sapphire', hex: '#3563B5' },

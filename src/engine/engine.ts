@@ -20,7 +20,7 @@ export function initialState(g: Game): State {
     jailed: per(false), jailTurns: per(0), jailCards: per(0), bankrupt: per(false),
     turn: g.players[0]?.id ?? '', round: 1,
     pacts: {}, loans: {}, immunities: {},
-    pos: per(0), moves: 1, doubles: 0, back: false,
+    pos: per(0), moves: 1, doubles: 0, back: false, dest: -1,
   }
 }
 
@@ -49,8 +49,8 @@ export function apply(s: State, o: Op, g: Game) {
       if (o.rolled) s.doubles = 3 // doubles that open the cell do not roll again
       break
     }
-    case 'at': s.pos[o.player] = o.cell; s.back = false; if (o.player === s.turn) s.moves = Math.max(0, s.moves - 1); break
-    case 'moves': s.moves = Math.max(0, s.moves + o.delta); s.back = !!o.back; break
+    case 'at': s.pos[o.player] = o.cell; s.back = false; s.dest = -1; if (o.player === s.turn) s.moves = Math.max(0, s.moves - 1); break
+    case 'moves': s.moves = Math.max(0, s.moves + o.delta); s.back = !!o.back; s.dest = o.to ?? -1; break
     case 'doubles': s.doubles++; s.moves++; break
     case 'jailCard': s.jailCards[o.player] += o.delta; break
     case 'bankrupt': s.bankrupt[o.player] = true; break
@@ -65,6 +65,7 @@ export function apply(s: State, o: Op, g: Game) {
       s.moves = s.jailed[o.player] ? 0 : 1
       s.doubles = 0
       s.back = false
+      s.dest = -1
     }
   }
 }
@@ -82,9 +83,6 @@ export const name = (g: Game, id: Party) =>
 
 export const groupCells = (b: Board, group: string) =>
   b.cells.flatMap((c, i) => (c.kind === 'property' && c.group === group ? [i] : []))
-
-export const ownsGroup = (g: Game, s: State, owner: string, group: string) =>
-  groupCells(g.board, group).every(i => s.owner[i] === owner)
 
 // ---------- pacts: shared holdings ----------
 
@@ -324,6 +322,13 @@ export function leaveJail(g: Game, s: State, pid: string, how: 'fine' | 'card' |
 export const cardTitle = (b: Board, c: Card) =>
   c.title.replace('{cell}', c.effect.type === 'advance' ? b.cells[c.effect.cell].name : '')
 
+/** The first square of this kind ahead of a square, for the "nearest railroad" cards. */
+export function nearest(g: Game, from: number, kind: 'railroad' | 'utility') {
+  const n = g.board.cells.length
+  for (let k = 1; k <= n; k++) if (g.board.cells[(from + k) % n].kind === kind) return (from + k) % n
+  return -1
+}
+
 /** Money and jail cards. A movement card (advance, nearest, move) grants one more landing, recorded next. */
 export function drawCard(g: Game, s: State, pid: string, card: Card): Entry | Err {
   const b = g.board, f = card.effect, who = name(g, pid), t = cardTitle(b, card)
@@ -359,8 +364,10 @@ export function drawCard(g: Game, s: State, pid: string, card: Card): Entry | Er
     case 'jail': return goToJail(g, pid, `drew "${t}" and went to jail`)
     case 'jailCard':
       return entry(`${who} drew "${t}" and kept it`, [{ op: 'jailCard', player: pid, delta: 1 }])
+    // movement cards grant one more landing, on the square they name; s.pos is the card's square
+    case 'advance': return entry(`${who} drew "${t}"`, [{ op: 'moves', delta: 1, to: f.cell }])
+    case 'nearest': return entry(`${who} drew "${t}"`, [{ op: 'moves', delta: 1, to: nearest(g, s.pos[pid], f.kind) }])
     case 'move': return entry(`${who} drew "${t}"`, [{ op: 'moves', delta: 1, back: true }])
-    default: return entry(`${who} drew "${t}"`, [{ op: 'moves', delta: 1 }])
   }
 }
 

@@ -17,21 +17,50 @@ export function cleanSteps(x: unknown): number[] | null {
 }
 export type NewPlayer = Pick<Player, 'name' | 'color' | 'accessory'> & { seed?: number }
 
-/** Every message on a session channel. `me` is the sending phone's device id, `to` the device a reply is for. */
+/**
+ * Every message on a session channel. `me` is the sending phone's device id, `to` the device a reply is for.
+ * The channel is shared, so nothing secret travels on it: a phone proves who it is by signing (see `Signed`).
+ */
 export type Msg =
   | { t: 'hi'; me: string }
   | { t: 'hello'; game: Game | null; entries: Entry[]; players: Player[]; seated: string[]; offers: Offer[]; auction?: Auction | null }
-  | { t: 'seat'; me: string; id: string; token?: string; player?: NewPlayer; host?: string; claim?: string }
-  | { t: 'do'; me: string; id: string; token: string; name: string; args: unknown[] }
-  | { t: 'done'; to: string; id: string; ok?: true; pending?: true; error?: string; pid?: string; token?: string; admin?: boolean }
-  | { t: 'answer'; me: string; token: string; offer: string; yes: boolean }
-  | { t: 'decide'; me: string; token: string; offer: string; yes: boolean }
+  | Signed<{ t: 'seat'; pub?: JsonWebKey; player?: NewPlayer; host?: string; claim?: string }>
+  | Signed<{ t: 'do'; name: string; args: unknown[] }>
+  | { t: 'done'; to: string; id: string; ok?: true; pending?: true; error?: string; pid?: string; admin?: boolean }
+  | Signed<{ t: 'answer'; offer: string; yes: boolean }>
+  | Signed<{ t: 'decide'; offer: string; yes: boolean }>
   | { t: 'offers'; offers: Offer[] }
   | { t: 'auction'; auction: Auction | null }
-  | { t: 'bid'; me: string; token: string; auction: string; amount: number | null } // null: out of the bidding
+  | Signed<{ t: 'bid'; auction: string; amount: number | null }> // null: out of the bidding
   | { t: 'sync'; keep: number; add: Entry[]; n: number }
   | { t: 'say'; pids: string[]; text: string; error?: boolean }
   | { t: 'bye' }
+
+/** A phone's request: `key` names its public key, `sig` signs everything else, `id` and `at` stop a replay. */
+export type Signed<T> = T & { me: string; id: string; key: string; at: number; sig: string }
+
+// ---------- identity: a key pair per device; the private half never leaves it ----------
+
+const EC = { name: 'ECDSA', namedCurve: 'P-256' } as const, SIG = { name: 'ECDSA', hash: 'SHA-256' } as const
+const bytes = (t: string) => new TextEncoder().encode(t)
+export type Identity = { key: string; pub: JsonWebKey; jwk: JsonWebKey; sign: (data: string) => Promise<string> }
+
+/** This device's key pair: the saved one, or a new one (save `jwk` to keep the seat across reloads). */
+export async function identity(saved?: JsonWebKey | null): Promise<Identity> {
+  let priv: CryptoKey, jwk: JsonWebKey
+  if (saved?.d) { jwk = saved; priv = await crypto.subtle.importKey('jwk', saved, EC, true, ['sign']) }
+  else { const k = await crypto.subtle.generateKey(EC, true, ['sign', 'verify']); priv = k.privateKey; jwk = await crypto.subtle.exportKey('jwk', priv) }
+  const pub = { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y }
+  return { key: jwk.x!, pub, jwk, sign: async d => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign(SIG, priv, bytes(d))))) }
+}
+
+/** Whether `sig` is this public key's signature of `data`. Anything malformed is simply false. */
+export async function verify(pub: JsonWebKey, data: string, sig: string) {
+  try {
+    const k = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: pub.x, y: pub.y }, EC, false, ['verify'])
+    return await crypto.subtle.verify(SIG, k, Uint8Array.from(atob(sig), c => c.charCodeAt(0)), bytes(data))
+  } catch { return false }
+}
 
 export const SB_URL = import.meta.env?.VITE_SUPABASE_URL as string | undefined
 export const KEY = import.meta.env?.VITE_SUPABASE_KEY as string | undefined

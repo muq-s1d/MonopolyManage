@@ -3,6 +3,19 @@ export type Release = { version: string; date: string; title: string; items: { l
 
 export const RELEASES: Release[] = [
   {
+    version: '1.3.1',
+    date: '2026-10-04',
+    title: 'Only where you can land',
+    items: [
+      { lead: 'Only reachable squares', text: 'A roll can only land on the squares 2 to 12 ahead, so those are the only ones you can buy or pay on. Tap any other square and you see its deed, nothing more. A card that moves you lights up the one square it names with a star.' },
+      { lead: 'Utility rent from the roll', text: 'The board knows how far you moved, so a utility charges on that roll without asking for the dice.' },
+      { lead: 'Nobody can act as you', text: 'Each phone now signs what it sends with a key that never leaves it. A copied, changed or replayed message is thrown away, so nobody listening in can pay out your money or answer your deals.' },
+      { lead: 'The host phone code works once', text: 'The QR code that makes a phone the host’s own changes as soon as it is used.' },
+      { lead: 'Sturdier sessions', text: 'Long games reach a reconnecting phone in pieces, so they never hit the size limit. Odd amounts are refused, and each player can have five requests waiting at most.' },
+      { lead: 'Host fixes', text: 'If a piece was moved without being recorded, the host screen can still record a landing on any square from its deed.' },
+    ],
+  },
+  {
     version: '1.3.0',
     date: '2026-09-27',
     title: 'Tap the board',

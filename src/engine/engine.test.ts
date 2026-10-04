@@ -380,7 +380,7 @@ test.after(() => {
 })
 
 test('one landing per roll: Go from the squares, doubles, movement cards, jail', async () => {
-  const { land, rollDoubles, nearest } = await import('./actions.ts')
+  const { land, rollDoubles, reach } = await import('./actions.ts')
   const t = setup()
   const bw = idx('Boardwalk'), tax = idx('Luxury Tax'), rr = idx('Reading Railroad'), ch = idx('Chance')
   assert.equal(t.s.moves, 1)
@@ -404,11 +404,12 @@ test('one landing per roll: Go from the squares, doubles, movement cards, jail',
   // bob draws "advance to the nearest railroad": one more landing, found from where he stands
   t.run(land(t.g, t.s, 'bob', ch, { do: 'card', card: t.g.board.chance.find(c => c.effect.type === 'nearest' && c.effect.kind === 'railroad')! }))
   assert.equal(t.s.moves, 1, 'a movement card grants the next landing')
-  assert.equal(nearest(t.g, t.s.pos.bob, 'railroad'), idx('Pennsylvania Railroad'))
+  assert.deepEqual(reach(t.g, t.s, 'bob'), { [idx('Pennsylvania Railroad')]: 0 }, 'the card names one square, found from the Chance square')
   // a card move backwards past nothing: "go back three" from Chance 7 to Income Tax 4 is no pass of Go
   const u = setup()
   u.run(land(u.g, u.s, 'ann', ch, { do: 'card', card: u.g.board.chance.find(c => c.effect.type === 'move')! }))
   assert.equal(u.s.back, true)
+  assert.equal(reach(u.g, u.s, 'ann')[idx('Income Tax')], -3, 'backwards, up to twelve squares')
   u.run(land(u.g, u.s, 'ann', idx('Income Tax'), { do: 'tax' }))
   check('ann back three onto income tax, no salary', 1500 - 200, u.s.cash.ann)
   // leaving jail on doubles moves once and does not roll again
@@ -418,4 +419,17 @@ test('one landing per roll: Go from the squares, doubles, movement cards, jail',
   v.run(E.leaveJail(v.g, v.s, 'ann', 'roll'))
   v.run(land(v.g, v.s, 'ann', idx('St. Charles Place')))
   assert.equal((rollDoubles(v.g, v.s, 'ann') as Err).error, 'No more rolls this turn')
+})
+
+test('the squares a roll reaches, and a utility charged on the roll that got there', async () => {
+  const { land, reach } = await import('./actions.ts')
+  const t = setup()
+  const r = reach(t.g, t.s, 'ann')
+  assert.deepEqual(Object.keys(r).map(Number), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'from Go: 2 to 12 squares on')
+  assert.equal(r[12], 12)
+  assert.deepEqual(reach(t.g, t.s, 'bob'), {}, 'nobody else lands on ann’s turn')
+  t.run(E.buy(t.g, t.s, 'bob', idx('Electric Company')))
+  t.run(land(t.g, t.s, 'ann', idx('Electric Company'), { do: 'rent', opts: { dice: 2 } }))
+  check('a 12 onto Electric Company costs 4 x 12, whatever dice the phone claims', 1500 - 48, t.s.cash.ann)
+  assert.deepEqual(reach(t.g, t.s, 'ann'), {}, 'the roll is used up')
 })
